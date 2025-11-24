@@ -1,0 +1,6 @@
+[theme]
+primaryColor="#536F60"              # μεσαίο πράσινο
+backgroundColor="#1C332D"           # πολύ σκούρο πράσινο/μαύρο
+secondaryBackgroundColor="#365345"  # πιο ανοιχτό πράσινο
+textColor="#BBC0B9"                 # πολύ ανοιχτό γκρι-πράσινο
+font="sans serif"

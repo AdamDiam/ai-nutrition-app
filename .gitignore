@@ -1,0 +1,15 @@
+# Secrets
+.env
+
+# IDE
+.idea/
+*.iml
+
+# macOS
+.DS_Store
+
+# Local user data
+user_data/
+
+# Virtual env
+venv/
