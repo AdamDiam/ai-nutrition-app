@@ -406,14 +406,22 @@ if st.session_state["logged_in"]:
         st.markdown(tr("sidebar_sub"))
         st.markdown("---")
 
-        if st.button(tr("menu_home"), use_container_width=True):
+        # Κύριες ενέργειες – πιο έντονα (primary)
+        if st.button(tr("menu_home"), use_container_width=True, type="primary"):
             st.session_state["page"] = "home"
-        if st.button(tr("menu_new_plan"), use_container_width=True):
+
+        if st.button(tr("menu_new_plan"), use_container_width=True, type="primary"):
             st.session_state["page"] = "new_plan"
+
+        st.markdown("---")
+
+        # Δευτερεύουσες επιλογές
         if st.button(tr("menu_progress"), use_container_width=True):
             st.session_state["page"] = "progress"
+
         if st.button(tr("menu_profile"), use_container_width=True):
             st.session_state["page"] = "profile"
+
         if st.button(tr("menu_about"), use_container_width=True):
             st.session_state["page"] = "about"
 
@@ -459,26 +467,39 @@ if page == "home":
     lang = st.session_state["lang"]
     username = (st.session_state.get("username") or "").strip()
 
+    # Καλωσόρισμα
     st.subheader(f"{tr('home_welcome')} {username or ''}".strip())
     st.write("")
     st.write(tr("intro"))
 
-    # Κάρτες επιλογών
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("📅 " + tr("home_new_plan"), use_container_width=True):
-            st.session_state["page"] = "new_plan"
-            st.rerun()
-        if st.button("👤 " + tr("home_profile"), use_container_width=True):
-            st.session_state["page"] = "profile"
-            st.rerun()
-    with c2:
-        if st.button("📈 " + tr("home_progress"), use_container_width=True):
-            st.session_state["page"] = "progress"
-            st.rerun()
-        if st.button("📚 " + tr("home_view_plans"), use_container_width=True):
-            st.session_state["page"] = "progress"
-            st.rerun()
+    st.write("")
+    st.markdown("### 🚀 Ξεκίνα από εδώ")
+
+    # Κύριο, μεγάλο CTA – μόνο του
+    primary_cta = st.button(
+        "📅 " + tr("home_new_plan"),
+        use_container_width=True,
+        type="primary",
+    )
+    if primary_cta:
+        st.session_state["page"] = "new_plan"
+        st.rerun()
+
+    st.write("")
+    st.markdown("### Άλλες επιλογές")
+
+    # ΟΛΕΣ οι άλλες επιλογές κάθετα μία-μία
+    if st.button("📈 " + tr("home_progress"), use_container_width=True):
+        st.session_state["page"] = "progress"
+        st.rerun()
+
+    if st.button("👤 " + tr("home_profile"), use_container_width=True):
+        st.session_state["page"] = "profile"
+        st.rerun()
+
+    if st.button("📚 " + tr("home_view_plans"), use_container_width=True):
+        st.session_state["page"] = "progress"
+        st.rerun()
 
     # Λίγη σύνοψη από το ιστορικό αν υπάρχει
     if username and HISTORY_FILE.exists():
@@ -489,6 +510,7 @@ if page == "home":
             user_hist = user_hist.sort_values("timestamp")
             last_row = user_hist.iloc[-1]
             start_row = user_hist.iloc[0]
+
             if lang == "el":
                 st.markdown("### Μικρή σύνοψη")
                 st.markdown(
@@ -503,6 +525,7 @@ if page == "home":
                     f"- First recorded weight: **{start_row['weight_kg']} kg**\n"
                     f"- Change: **{round(last_row['weight_kg'] - start_row['weight_kg'], 1)} kg**"
                 )
+
 
 # PROFILE PAGE
 elif page == "profile":
