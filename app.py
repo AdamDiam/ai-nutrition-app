@@ -7,7 +7,13 @@ import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
 from openai import OpenAI
+import base64
 
+def get_base64_logo(path: str) -> str:
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode("utf-8")
+
+LOGO_BASE64 = get_base64_logo("assets/logo.png")
 # ----------------- CONFIG & OPENAI -----------------
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
@@ -402,11 +408,20 @@ with lang_col1:
 # ----------------- SIDEBAR NAV (μόνο όταν είναι logged in) -----------------
 if st.session_state["logged_in"]:
     with st.sidebar:
-        st.markdown(f"### {tr('sidebar_title')}")
-        st.markdown(tr("sidebar_sub"))
+        # --- LOGO & BRAND ---
+        # --- LOGO & BRAND ---
+        st.markdown(
+            "<div style='text-align:center; margin-top:1rem; margin-bottom:0.5rem;'>",
+            unsafe_allow_html=True,
+        )
+        st.image("assets/logo.png", width=230)
+
+        st.markdown("---")
+        st.markdown(f"**{tr('sidebar_title')}**")
+        st.markdown(f"<span style='font-size:0.85rem; opacity:0.8;'>{tr('sidebar_sub')}</span>", unsafe_allow_html=True)
         st.markdown("---")
 
-        # Κύριες ενέργειες – πιο έντονα (primary)
+        # Κύριες ενέργειες
         if st.button(tr("menu_home"), use_container_width=True, type="primary"):
             st.session_state["page"] = "home"
 
@@ -425,6 +440,7 @@ if st.session_state["logged_in"]:
         if st.button(tr("menu_about"), use_container_width=True):
             st.session_state["page"] = "about"
 
+
 # ----------------- TITLE -----------------
 st.markdown(
     f"<h1 style='text-align:center; margin-top:1.0rem;'>{tr('title')}</h1>",
@@ -434,23 +450,38 @@ st.markdown(
     f"<p style='text-align:center; opacity:0.85;'>{tr('subtitle')}</p>",
     unsafe_allow_html=True,
 )
+# --- CENTERED LOGO UNDER TITLE (USING BASE64 HTML) ---
+st.markdown(
+    f"""
+    <div style="text-align:center; margin-top:1.5rem; margin-bottom:1.5rem;">
+        <img src="data:image/png;base64,{LOGO_BASE64}"
+             style="width:380px; max-width:90%; height:auto; display:block; margin:0 auto;">
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 st.write("")
+
 
 # ----------------- LOGIN PAGE -----------------
 if not st.session_state["logged_in"] or st.session_state["page"] == "login":
     st.session_state["page"] = "login"
     st.subheader(tr("login_title"))
-    username_input = st.text_input(tr("username"), value=st.session_state["username"])
-    if st.button(tr("login_button")):
+
+    with st.form("login_form", clear_on_submit=False):
+        username_input = st.text_input(tr("username"), value=st.session_state["username"])
+        submit_login = st.form_submit_button(tr("login_button"))
+
+    if submit_login:
         if not username_input.strip():
             st.warning(tr("saved_err_no_user"))
         else:
             st.session_state["username"] = username_input.strip()
             st.session_state["logged_in"] = True
-            # load profile αν υπάρχει
             load_profile(st.session_state["username"])
             st.session_state["page"] = "home"
             st.rerun()
+
     st.write("---")
     st.markdown(
         f"<p style='text-align:center; font-size:0.85rem; opacity:0.7;'>{tr('footer')}</p>",
@@ -510,21 +541,53 @@ if page == "home":
             user_hist = user_hist.sort_values("timestamp")
             last_row = user_hist.iloc[-1]
             start_row = user_hist.iloc[0]
+            diff = round(last_row["weight_kg"] - start_row["weight_kg"], 1)
 
             if lang == "el":
-                st.markdown("### Μικρή σύνοψη")
                 st.markdown(
-                    f"- Τελευταία καταγραφή βάρους: **{last_row['weight_kg']} kg**\n"
-                    f"- Πρώτη καταγραφή: **{start_row['weight_kg']} kg**\n"
-                    f"- Αλλαγή: **{round(last_row['weight_kg'] - start_row['weight_kg'], 1)} kg**"
+                    f"""
+                    <div style="
+                        margin-top:1.5rem; 
+                        padding:1rem 1.2rem; 
+                        border-radius:0.75rem;
+                        background-color: rgba(255,255,255,0.03);
+                        border: 1px solid rgba(255,255,255,0.12);
+                    ">
+                        <div style="font-weight:600; margin-bottom:0.5rem;">
+                            Μικρή σύνοψη προόδου
+                        </div>
+                        <div style="font-size:0.9rem; line-height:1.5;">
+                            • Τελευταία καταγραφή βάρους: <b>{last_row['weight_kg']} kg</b><br>
+                            • Πρώτη καταγραφή: <b>{start_row['weight_kg']} kg</b><br>
+                            • Αλλαγή: <b>{diff} kg</b>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
                 )
             else:
-                st.markdown("### Quick summary")
                 st.markdown(
-                    f"- Last recorded weight: **{last_row['weight_kg']} kg**\n"
-                    f"- First recorded weight: **{start_row['weight_kg']} kg**\n"
-                    f"- Change: **{round(last_row['weight_kg'] - start_row['weight_kg'], 1)} kg**"
+                    f"""
+                    <div style="
+                        margin-top:1.5rem; 
+                        padding:1rem 1.2rem; 
+                        border-radius:0.75rem;
+                        background-color: rgba(255,255,255,0.03);
+                        border: 1px solid rgba(255,255,255,0.12);
+                    ">
+                        <div style="font-weight:600; margin-bottom:0.5rem;">
+                            Quick progress summary
+                        </div>
+                        <div style="font-size:0.9rem; line-height:1.5;">
+                            • Last recorded weight: <b>{last_row['weight_kg']} kg</b><br>
+                            • First recorded weight: <b>{start_row['weight_kg']} kg</b><br>
+                            • Change: <b>{diff} kg</b>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
                 )
+
 
 
 # PROFILE PAGE
