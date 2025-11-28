@@ -152,6 +152,58 @@ TEXT = {
         "progress_saved": "✅ Το βάρος σου για σήμερα αποθηκεύτηκε.",
         "security_question": "Ποιο είναι το αγαπημένο σου χρώμα;",
         "security_answer_label": "Απάντηση στην ερώτηση",
+# Auth – κοινά
+        "login_title": "Σύνδεση",
+        "login_username": "Όνομα χρήστη",
+        "login_password": "Κωδικός",
+        "login_button": "Σύνδεση",
+        "login_new_user_cta": "🆕 Νέος χρήστης; Δημιούργησε λογαριασμό",
+        "login_forgot_password": "Ξέχασες τον κωδικό;",
+        "login_err_no_username": "❌ Συμπλήρωσε όνομα χρήστη.",
+        "login_err_no_password": "❌ Συμπλήρωσε κωδικό.",
+        "login_err_no_user": "❌ Ο χρήστης δεν υπάρχει.",
+        "login_err_wrong_password": "❌ Λάθος κωδικός.",
+        "login_success": "✅ Επιτυχής σύνδεση!",
+
+        # Signup
+        "signup_title": "🆕 Δημιουργία λογαριασμού",
+        "signup_username": "Όνομα χρήστη (login)",
+        "signup_fullname": "Ονοματεπώνυμο",
+        "signup_password": "Κωδικός",
+        "signup_password_confirm": "Επιβεβαίωση κωδικού",
+        "signup_security_answer": "Απάντηση στη μυστική ερώτηση",
+        "signup_button": "Δημιουργία λογαριασμού",
+        "signup_err_username_missing": "Βάλε όνομα χρήστη.",
+        "signup_err_username_exists": "Το όνομα χρήστη υπάρχει ήδη.",
+        "signup_err_password_missing": "Βάλε κωδικό.",
+        "signup_err_password_mismatch": "Οι κωδικοί δεν ταιριάζουν.",
+        "signup_err_security_missing": "Βάλε απάντηση στη μυστική ερώτηση.",
+        "signup_success": "✅ Ο λογαριασμός δημιουργήθηκε. Μπορείς τώρα να συνδεθείς.",
+        "signup_back_to_login": "Μετάβαση στη σελίδα σύνδεσης",
+
+        # Forgot password
+        "forgot_title": "🔑 Επαναφορά κωδικού",
+        "forgot_intro": "Συμπλήρωσε τα στοιχεία σου για να αλλάξεις τον κωδικό.",
+        "forgot_username": "Όνομα χρήστη",
+        "forgot_new_password": "Νέος κωδικός",
+        "forgot_new_password_confirm": "Επιβεβαίωση νέου κωδικού",
+        "forgot_button": "Αλλαγή κωδικού",
+        "forgot_err_no_user": "Ο χρήστης δεν βρέθηκε.",
+        "forgot_err_no_username": "Συμπλήρωσε όνομα χρήστη.",
+        "forgot_err_no_answer": "Συμπλήρωσε την απάντηση στη μυστική ερώτηση.",
+        "forgot_err_no_stored_answer": "Για αυτόν τον χρήστη δεν έχει οριστεί μυστική απάντηση. Επικοινώνησε με τον διαχειριστή.",
+        "forgot_err_wrong_answer": "Η απάντηση στη μυστική ερώτηση δεν είναι σωστή.",
+        "forgot_err_no_password": "Βάλε νέο κωδικό.",
+        "forgot_err_password_mismatch": "Οι κωδικοί δεν ταιριάζουν.",
+        "forgot_success": "✅ Ο κωδικός ενημερώθηκε. Μπορείς τώρα να συνδεθείς.",
+        "forgot_back_to_login": "Πίσω στη σελίδα σύνδεσης",
+
+        # Security question (που έχουμε ήδη)
+        "security_question": "Ποιο είναι το αγαπημένο σου χρώμα;",
+        "security_answer_label": "Απάντηση στη μυστική ερώτηση",
+
+        # Logout
+        "logout_button": "🚪 Αποσύνδεση",
     },
     "en": {
         "security_question": "What is your favourite color?",
@@ -232,6 +284,58 @@ TEXT = {
         "progress_weight_today": "Today's weight (kg)",
         "progress_save": "💾 Save today's weight",
         "progress_saved": "✅ Your weight for today has been saved.",
+# Auth – common
+        "login_title": "Login",
+        "login_username": "Username",
+        "login_password": "Password",
+        "login_button": "Login",
+        "login_new_user_cta": "🆕 New here? Create an account",
+        "login_forgot_password": "Forgot password?",
+        "login_err_no_username": "❌ Please enter a username.",
+        "login_err_no_password": "❌ Please enter a password.",
+        "login_err_no_user": "❌ User does not exist.",
+        "login_err_wrong_password": "❌ Incorrect password.",
+        "login_success": "✅ Login successful!",
+
+        # Signup
+        "signup_title": "🆕 Create an account",
+        "signup_username": "Username (login)",
+        "signup_fullname": "Full name",
+        "signup_password": "Password",
+        "signup_password_confirm": "Confirm password",
+        "signup_security_answer": "Answer to the secret question",
+        "signup_button": "Create account",
+        "signup_err_username_missing": "Please enter a username.",
+        "signup_err_username_exists": "This username already exists.",
+        "signup_err_password_missing": "Please enter a password.",
+        "signup_err_password_mismatch": "Passwords do not match.",
+        "signup_err_security_missing": "Please enter an answer to the secret question.",
+        "signup_success": "✅ Account created. You can now log in.",
+        "signup_back_to_login": "Back to login page",
+
+        # Forgot password
+        "forgot_title": "🔑 Reset password",
+        "forgot_intro": "Fill in your details to change your password.",
+        "forgot_username": "Username",
+        "forgot_new_password": "New password",
+        "forgot_new_password_confirm": "Confirm new password",
+        "forgot_button": "Change password",
+        "forgot_err_no_user": "User not found.",
+        "forgot_err_no_username": "Please enter a username.",
+        "forgot_err_no_answer": "Please enter the answer to the secret question.",
+        "forgot_err_no_stored_answer": "No secret answer stored for this user. Contact the administrator.",
+        "forgot_err_wrong_answer": "The answer to the secret question is not correct.",
+        "forgot_err_no_password": "Please enter a new password.",
+        "forgot_err_password_mismatch": "Passwords do not match.",
+        "forgot_success": "✅ Password updated. You can now log in.",
+        "forgot_back_to_login": "Back to login page",
+
+        # Security question
+        "security_question": "What is your favourite color?",
+        "security_answer_label": "Answer to the secret question",
+
+        # Logout
+        "logout_button": "🚪 Logout",
     },
 }
 
@@ -508,6 +612,55 @@ def admin_page():
                 st.success(f"✅ Ο χρήστης **{delete_user}** διαγράφηκε.")
                 st.rerun()
 
+def signup_page():
+    users = load_users()
+
+    left, center, right = st.columns([1, 2, 1])
+    with center:
+        st.title(tr("signup_title"))
+
+        with st.form("signup_form"):
+            username = st.text_input(tr("signup_username")).strip()
+            fullname = st.text_input(tr("signup_fullname")).strip()
+            password = st.text_input(tr("signup_password"), type="password")
+            password2 = st.text_input(tr("signup_password_confirm"), type="password")
+            security_answer = st.text_input(
+                f"{tr('signup_security_answer')} ({get_security_question()})"
+            ).strip()
+            submit_signup = st.form_submit_button(tr("signup_button"))
+
+        if submit_signup:
+            if not username:
+                st.error(tr("signup_err_username_missing"))
+                return
+            if username in users:
+                st.error(tr("signup_err_username_exists"))
+                return
+            if not password:
+                st.error(tr("signup_err_password_missing"))
+                return
+            if password != password2:
+                st.error(tr("signup_err_password_mismatch"))
+                return
+            if not security_answer:
+                st.error(tr("signup_err_security_missing"))
+                return
+
+            users[username] = {
+                "password": hash_password(password),
+                "fullname": fullname,
+                "role": "user",
+                "security_answer": security_answer.lower(),
+            }
+            save_users(users)
+            st.success(tr("signup_success"))
+
+            if st.button(tr("signup_back_to_login")):
+                st.session_state["page"] = "login"
+                st.rerun()
+
+
+
 def forgot_password_page():
     users = load_users()
     if not users:
@@ -516,28 +669,28 @@ def forgot_password_page():
 
     left, center, right = st.columns([1, 2, 1])
     with center:
-        st.title("🔑 Επαναφορά κωδικού")
-        st.write("Συμπλήρωσε τα στοιχεία σου για να αλλάξεις τον κωδικό.")
+        st.title(tr("forgot_title"))
+        st.write(tr("forgot_intro"))
 
         with st.form("forgot_password_form"):
-            username_input = st.text_input("Όνομα χρήστη")
+            username_input = st.text_input(tr("forgot_username"))
             security_answer_input = st.text_input(
                 f"{tr('security_answer_label')}: {get_security_question()}"
             )
-            new_pass = st.text_input("Νέος κωδικός", type="password")
-            new_pass2 = st.text_input("Επιβεβαίωση νέου κωδικού", type="password")
-            submit_reset = st.form_submit_button("Αλλαγή κωδικού")
+            new_pass = st.text_input(tr("forgot_new_password"), type="password")
+            new_pass2 = st.text_input(tr("forgot_new_password_confirm"), type="password")
+            submit_reset = st.form_submit_button(tr("forgot_button"))
 
         if submit_reset:
             username_clean = username_input.strip()
 
             if not username_clean:
-                st.error("Συμπλήρωσε όνομα χρήστη.")
+                st.error(tr("forgot_err_no_username"))
                 return
 
             username_map = {u.lower(): u for u in users.keys()}
             if username_clean.lower() not in username_map:
-                st.error("Ο χρήστης δεν βρέθηκε.")
+                st.error(tr("forgot_err_no_user"))
                 return
 
             actual_key = username_map[username_clean.lower()]
@@ -545,32 +698,29 @@ def forgot_password_page():
 
             stored_answer = user_data.get("security_answer")
             if not stored_answer:
-                st.error(
-                    "Για αυτόν τον χρήστη δεν έχει οριστεί μυστική απάντηση. "
-                    "Επικοινώνησε με τον διαχειριστή."
-                )
+                st.error(tr("forgot_err_no_stored_answer"))
                 return
 
             if not security_answer_input.strip():
-                st.error("Συμπλήρωσε την απάντηση στη μυστική ερώτηση.")
+                st.error(tr("forgot_err_no_answer"))
                 return
 
             if stored_answer != security_answer_input.strip().lower():
-                st.error("Η απάντηση στη μυστική ερώτηση δεν είναι σωστή.")
+                st.error(tr("forgot_err_wrong_answer"))
                 return
 
             if not new_pass:
-                st.error("Βάλε νέο κωδικό.")
+                st.error(tr("forgot_err_no_password"))
                 return
             if new_pass != new_pass2:
-                st.error("Οι κωδικοί δεν ταιριάζουν.")
+                st.error(tr("forgot_err_password_mismatch"))
                 return
 
             users[actual_key]["password"] = hash_password(new_pass)
             save_users(users)
-            st.success("✅ Ο κωδικός ενημερώθηκε. Μπορείς τώρα να συνδεθείς.")
+            st.success(tr("forgot_success"))
 
-            if st.button("Πίσω στη σελίδα σύνδεσης"):
+            if st.button(tr("forgot_back_to_login")):
                 st.session_state["page"] = "login"
                 st.rerun()
 
@@ -657,6 +807,13 @@ if st.session_state["logged_in"]:
                 st.session_state["page"] = "admin"
                 st.rerun()
 
+        st.markdown("---")
+        if st.button(tr("logout_button"), use_container_width=True):
+            st.session_state["logged_in"] = False
+            st.session_state["username"] = ""
+            st.session_state["role"] = "user"
+            st.session_state["page"] = "login"
+            st.rerun()
 
 # ----------------- TITLE -----------------
 st.markdown(
@@ -667,47 +824,59 @@ st.markdown(
     f"<p style='text-align:center; opacity:0.85;'>{tr('subtitle')}</p>",
     unsafe_allow_html=True,
 )
-# --- CENTERED LOGO UNDER TITLE (USING BASE64 HTML) ---
-st.markdown(
-    f"""
-    <div style="text-align:center; margin-top:1.5rem; margin-bottom:1.5rem;">
-        <img src="data:image/png;base64,{LOGO_BASE64}"
-             style="width:380px; max-width:90%; height:auto; display:block; margin:0 auto;">
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-st.write("")
 
 
-# ----------------- LOGIN / FORGOT PASSWORD ROUTING -----------------
+
+# ----------------- LOGIN / SIGNUP / FORGOT PASSWORD ROUTING -----------------
 if not st.session_state.get("logged_in", False):
 
-    # 1) If user is on forgot-password page, show that page
+    # 1) Forgot password page
     if st.session_state.get("page") == "forgot_password":
         forgot_password_page()
         st.stop()
 
-    # 2) Otherwise, show LOGIN
+    # 2) Signup page
+    if st.session_state.get("page") == "signup":
+        signup_page()
+        st.stop()
+
+    # 3) Otherwise show LOGIN
     st.session_state["page"] = "login"
 
-    # --- CENTERED BOX ---
     outer_left, outer_center, outer_right = st.columns([1, 2, 1])
     with outer_center:
-        st.subheader("🔐 Σύνδεση")
+        # --- CENTERED LOGO ONLY ON AUTH PAGES ---
+        st.markdown(
+            f"""
+            <div style="text-align:center; margin-top:1.5rem; margin-bottom:1.5rem;">
+                <img src="data:image/png;base64,{LOGO_BASE64}"
+                     style="width:380px; max-width:90%; height:auto; display:block; margin:0 auto;">
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.write("")
+
+        st.subheader(tr("login_title"))
 
         users = load_users()
 
-        # --- LOGIN FORM (inside center column) ---
+        # --- LOGIN FORM ---
         with st.form("login_form"):
-            username_input = st.text_input("Όνομα χρήστη")
-            password_input = st.text_input("Κωδικός", type="password")
-            submit_login = st.form_submit_button("Σύνδεση")
+            username_input = st.text_input(tr("login_username"))
+            password_input = st.text_input(tr("login_password"), type="password")
+            submit_login = st.form_submit_button(tr("login_button"))
 
-        # --- FORGOT PASSWORD (right-aligned small button) ---
-        col_a, col_b = st.columns([3, 1])
-        with col_b:
-            forgot_clicked = st.button("Ξέχασες τον κωδικό;")
+        # --- ACTION BUTTONS UNDER FORM ---
+        c1, c2, c3 = st.columns([1, 1, 1])
+        with c1:
+            signup_clicked = st.button(tr("login_new_user_cta"))
+        with c3:
+            forgot_clicked = st.button(tr("login_forgot_password"))
+
+        if signup_clicked:
+            st.session_state["page"] = "signup"
+            st.rerun()
 
         if forgot_clicked:
             st.session_state["page"] = "forgot_password"
@@ -718,23 +887,23 @@ if not st.session_state.get("logged_in", False):
             username_clean = username_input.strip()
 
             if not username_clean:
-                st.error("❌ Συμπλήρωσε όνομα χρήστη.")
+                st.error(tr("login_err_no_username"))
             elif not password_input:
-                st.error("❌ Συμπλήρωσε κωδικό.")
+                st.error(tr("login_err_no_password"))
             else:
                 users = load_users()
                 username_map = {u.lower(): u for u in users.keys()}
 
                 if username_clean.lower() not in username_map:
-                    st.error("❌ Ο χρήστης δεν υπάρχει.")
+                    st.error(tr("login_err_no_user"))
                 else:
                     actual_key = username_map[username_clean.lower()]
                     stored_hash = users[actual_key]["password"]
 
                     if not check_password(password_input, stored_hash):
-                        st.error("❌ Λάθος κωδικός.")
+                        st.error(tr("login_err_wrong_password"))
                     else:
-                        st.success("✅ Επιτυχής σύνδεση!")
+                        st.success(tr("login_success"))
                         st.session_state["logged_in"] = True
                         st.session_state["username"] = actual_key
                         st.session_state["role"] = users[actual_key].get("role", "user")
