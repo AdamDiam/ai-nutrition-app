@@ -1,3 +1,9 @@
+# Username: AdamDiam (admin)
+# Password: 1234
+
+# Username: Demo (user)
+# Password: 1234
+
 import os
 import io
 from pathlib import Path
@@ -8,6 +14,40 @@ import pandas as pd
 from dotenv import load_dotenv
 from openai import OpenAI
 import base64
+import json
+import bcrypt
+
+USERS_FILE = "users.json"
+SECURITY_QUESTION = "What is your favourite color?"
+
+def get_security_question() -> str:
+    return tr("security_question")
+
+def load_users():
+    try:
+        with open(USERS_FILE, "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+def save_users(users: dict):
+    with open(USERS_FILE, "w") as f:
+        json.dump(users, f, indent=4)
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode("utf-8")
+
+def check_password(password: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(password.encode(), hashed.encode())
+    except Exception:
+        return False
+
+def update_last_login(username: str):
+    users = load_users()
+    if username in users:
+        users[username]["last_login"] = datetime.utcnow().isoformat()
+        save_users(users)
 
 def get_base64_logo(path: str) -> str:
     with open(path, "rb") as f:
@@ -110,8 +150,12 @@ TEXT = {
         "progress_weight_today": "Σημερινό βάρος (kg)",
         "progress_save": "💾 Αποθήκευση σημερινού βάρους",
         "progress_saved": "✅ Το βάρος σου για σήμερα αποθηκεύτηκε.",
+        "security_question": "Ποιο είναι το αγαπημένο σου χρώμα;",
+        "security_answer_label": "Απάντηση στην ερώτηση",
     },
     "en": {
+        "security_question": "What is your favourite color?",
+        "security_answer_label": "Answer to the secret question",
         "title": "02Hero – AI Nutrition Helper",
         "subtitle": "Smart, AI-powered nutrition tailored to you.",
         "intro": "Enter your details and let the AI create a weekly meal plan based on your goal.",
@@ -362,6 +406,173 @@ def save_profile(username: str):
     df.to_csv(PROFILE_FILE, index=False)
     return True
 
+def admin_page():
+    st.title("🛠 Admin Panel")
+
+    users = load_users()
+
+    # ---- SECTION 1: Existing users ----
+    st.subheader("👥 Υπάρχοντες χρήστες")
+    if not users:
+        st.info("Δεν υπάρχουν χρήστες ακόμα.")
+    else:
+        for username, info in users.items():
+            role = info.get("role", "user")
+            fullname = info.get("fullname", "")
+            last_login = info.get("last_login", "—")
+            st.markdown(
+                f"- **{username}** ({role}) – {fullname} — "
+                f"_Last login_: {last_login}"
+            )
+
+    st.write("---")
+
+    # ---- SECTION 2: Create new user ----
+    st.subheader("➕ Δημιουργία νέου χρήστη")
+    with st.form("create_user_form"):
+        new_username = st.text_input("Όνομα χρήστη (login)").strip()
+        new_fullname = st.text_input("Ονοματεπώνυμο").strip()
+        new_role = st.selectbox("Ρόλος", ["user", "admin"])
+        new_password = st.text_input("Κωδικός", type="password")
+        new_password2 = st.text_input("Επιβεβαίωση κωδικού", type="password")
+        security_answer = st.text_input(
+            f"{tr('security_answer_label')} ({get_security_question()})"
+        ).strip()
+
+        submit_create = st.form_submit_button("Δημιουργία")
+
+    if submit_create:
+        if not new_username:
+            st.error("Βάλε όνομα χρήστη.")
+        elif new_username in users:
+            st.error("Αυτό το όνομα χρήστη υπάρχει ήδη.")
+        elif not new_password:
+            st.error("Βάλε κωδικό.")
+        elif new_password != new_password2:
+            st.error("Οι κωδικοί δεν ταιριάζουν.")
+        elif not security_answer:
+            st.error("Βάλε απάντηση στην ερώτηση.")
+        else:
+            users[new_username] = {
+                "password": hash_password(new_password),
+                "fullname": new_fullname,
+                "role": new_role,
+                # store lowercase answer for easy comparison
+                "security_answer": security_answer.lower(),
+            }
+            save_users(users)
+            st.success(f"✅ Ο χρήστης **{new_username}** δημιουργήθηκε.")
+            st.rerun()
+
+    st.write("---")
+
+    # ---- SECTION 3: Change password ----
+    st.subheader("🔑 Αλλαγή κωδικού χρήστη")
+    if users:
+        usernames_list = list(users.keys())
+        with st.form("change_password_form"):
+            target_user = st.selectbox("Επίλεξε χρήστη", usernames_list)
+            new_pass = st.text_input("Νέος κωδικός", type="password")
+            new_pass2 = st.text_input("Επιβεβαίωση νέου κωδικού", type="password")
+            submit_change = st.form_submit_button("Αλλαγή κωδικού")
+
+        if submit_change:
+            if not new_pass:
+                st.error("Βάλε νέο κωδικό.")
+            elif new_pass != new_pass2:
+                st.error("Οι κωδικοί δεν ταιριάζουν.")
+            else:
+                users[target_user]["password"] = hash_password(new_pass)
+                save_users(users)
+                st.success(f"✅ Ο κωδικός του **{target_user}** ενημερώθηκε.")
+                st.rerun()
+
+    st.write("---")
+
+    # ---- SECTION 4: Delete user ----
+    st.subheader("🗑 Διαγραφή χρήστη")
+    if users:
+        with st.form("delete_user_form"):
+            delete_user = st.selectbox("Επίλεξε χρήστη για διαγραφή", list(users.keys()))
+            confirm = st.checkbox("Επιβεβαίωση διαγραφής")
+            submit_delete = st.form_submit_button("Διαγραφή")
+
+        if submit_delete:
+            if not confirm:
+                st.error("Πρέπει να επιβεβαιώσεις τη διαγραφή.")
+            elif delete_user == st.session_state.get("username"):
+                st.error("Δεν μπορείς να διαγράψεις τον εαυτό σου ενώ είσαι συνδεδεμένος.")
+            else:
+                users.pop(delete_user, None)
+                save_users(users)
+                st.success(f"✅ Ο χρήστης **{delete_user}** διαγράφηκε.")
+                st.rerun()
+
+def forgot_password_page():
+    users = load_users()
+    if not users:
+        st.warning("Δεν υπάρχουν εγγεγραμμένοι χρήστες.")
+        return
+
+    left, center, right = st.columns([1, 2, 1])
+    with center:
+        st.title("🔑 Επαναφορά κωδικού")
+        st.write("Συμπλήρωσε τα στοιχεία σου για να αλλάξεις τον κωδικό.")
+
+        with st.form("forgot_password_form"):
+            username_input = st.text_input("Όνομα χρήστη")
+            security_answer_input = st.text_input(
+                f"{tr('security_answer_label')}: {get_security_question()}"
+            )
+            new_pass = st.text_input("Νέος κωδικός", type="password")
+            new_pass2 = st.text_input("Επιβεβαίωση νέου κωδικού", type="password")
+            submit_reset = st.form_submit_button("Αλλαγή κωδικού")
+
+        if submit_reset:
+            username_clean = username_input.strip()
+
+            if not username_clean:
+                st.error("Συμπλήρωσε όνομα χρήστη.")
+                return
+
+            username_map = {u.lower(): u for u in users.keys()}
+            if username_clean.lower() not in username_map:
+                st.error("Ο χρήστης δεν βρέθηκε.")
+                return
+
+            actual_key = username_map[username_clean.lower()]
+            user_data = users.get(actual_key, {})
+
+            stored_answer = user_data.get("security_answer")
+            if not stored_answer:
+                st.error(
+                    "Για αυτόν τον χρήστη δεν έχει οριστεί μυστική απάντηση. "
+                    "Επικοινώνησε με τον διαχειριστή."
+                )
+                return
+
+            if not security_answer_input.strip():
+                st.error("Συμπλήρωσε την απάντηση στη μυστική ερώτηση.")
+                return
+
+            if stored_answer != security_answer_input.strip().lower():
+                st.error("Η απάντηση στη μυστική ερώτηση δεν είναι σωστή.")
+                return
+
+            if not new_pass:
+                st.error("Βάλε νέο κωδικό.")
+                return
+            if new_pass != new_pass2:
+                st.error("Οι κωδικοί δεν ταιριάζουν.")
+                return
+
+            users[actual_key]["password"] = hash_password(new_pass)
+            save_users(users)
+            st.success("✅ Ο κωδικός ενημερώθηκε. Μπορείς τώρα να συνδεθείς.")
+
+            if st.button("Πίσω στη σελίδα σύνδεσης"):
+                st.session_state["page"] = "login"
+                st.rerun()
 
 # ----------------- SESSION STATE -----------------
 defaults = {
@@ -409,7 +620,6 @@ with lang_col1:
 if st.session_state["logged_in"]:
     with st.sidebar:
         # --- LOGO & BRAND ---
-        # --- LOGO & BRAND ---
         st.markdown(
             "<div style='text-align:center; margin-top:1rem; margin-bottom:0.5rem;'>",
             unsafe_allow_html=True,
@@ -440,6 +650,13 @@ if st.session_state["logged_in"]:
         if st.button(tr("menu_about"), use_container_width=True):
             st.session_state["page"] = "about"
 
+        # --- ADMIN BUTTON (only for admin role) ---
+        if st.session_state.get("role") == "admin":
+            st.markdown("---")
+            if st.button("🛠 Admin panel", use_container_width=True):
+                st.session_state["page"] = "admin"
+                st.rerun()
+
 
 # ----------------- TITLE -----------------
 st.markdown(
@@ -463,30 +680,69 @@ st.markdown(
 st.write("")
 
 
-# ----------------- LOGIN PAGE -----------------
-if not st.session_state["logged_in"] or st.session_state["page"] == "login":
+# ----------------- LOGIN / FORGOT PASSWORD ROUTING -----------------
+if not st.session_state.get("logged_in", False):
+
+    # 1) If user is on forgot-password page, show that page
+    if st.session_state.get("page") == "forgot_password":
+        forgot_password_page()
+        st.stop()
+
+    # 2) Otherwise, show LOGIN
     st.session_state["page"] = "login"
-    st.subheader(tr("login_title"))
 
-    with st.form("login_form", clear_on_submit=False):
-        username_input = st.text_input(tr("username"), value=st.session_state["username"])
-        submit_login = st.form_submit_button(tr("login_button"))
+    # --- CENTERED BOX ---
+    outer_left, outer_center, outer_right = st.columns([1, 2, 1])
+    with outer_center:
+        st.subheader("🔐 Σύνδεση")
 
-    if submit_login:
-        if not username_input.strip():
-            st.warning(tr("saved_err_no_user"))
-        else:
-            st.session_state["username"] = username_input.strip()
-            st.session_state["logged_in"] = True
-            load_profile(st.session_state["username"])
-            st.session_state["page"] = "home"
+        users = load_users()
+
+        # --- LOGIN FORM (inside center column) ---
+        with st.form("login_form"):
+            username_input = st.text_input("Όνομα χρήστη")
+            password_input = st.text_input("Κωδικός", type="password")
+            submit_login = st.form_submit_button("Σύνδεση")
+
+        # --- FORGOT PASSWORD (right-aligned small button) ---
+        col_a, col_b = st.columns([3, 1])
+        with col_b:
+            forgot_clicked = st.button("Ξέχασες τον κωδικό;")
+
+        if forgot_clicked:
+            st.session_state["page"] = "forgot_password"
             st.rerun()
 
-    st.write("---")
-    st.markdown(
-        f"<p style='text-align:center; font-size:0.85rem; opacity:0.7;'>{tr('footer')}</p>",
-        unsafe_allow_html=True,
-    )
+        # --- LOGIN LOGIC ---
+        if submit_login:
+            username_clean = username_input.strip()
+
+            if not username_clean:
+                st.error("❌ Συμπλήρωσε όνομα χρήστη.")
+            elif not password_input:
+                st.error("❌ Συμπλήρωσε κωδικό.")
+            else:
+                users = load_users()
+                username_map = {u.lower(): u for u in users.keys()}
+
+                if username_clean.lower() not in username_map:
+                    st.error("❌ Ο χρήστης δεν υπάρχει.")
+                else:
+                    actual_key = username_map[username_clean.lower()]
+                    stored_hash = users[actual_key]["password"]
+
+                    if not check_password(password_input, stored_hash):
+                        st.error("❌ Λάθος κωδικός.")
+                    else:
+                        st.success("✅ Επιτυχής σύνδεση!")
+                        st.session_state["logged_in"] = True
+                        st.session_state["username"] = actual_key
+                        st.session_state["role"] = users[actual_key].get("role", "user")
+                        update_last_login(actual_key)
+                        load_profile(actual_key)
+                        st.session_state["page"] = "home"
+                        st.rerun()
+
     st.stop()
 
 # ----------------- ROUTING ΑΝΑΛΟΓΑ ΜΕ ΤΗ ΣΕΛΙΔΑ -----------------
@@ -648,6 +904,17 @@ elif page == "profile":
         else:
             save_profile(st.session_state["username"])
             st.success(tr("profile_saved"))
+# ADMIN PAGE
+elif page == "admin":
+    # extra safety: only allow admin role
+    if st.session_state.get("role") == "admin":
+        admin_page()
+    else:
+        st.error("Δεν έχεις δικαίωμα πρόσβασης σε αυτή τη σελίδα.")
+
+# FORGOT PASSWORD PAGE
+elif page == "forgot_password":
+    forgot_password_page()
 
 # NEW PLAN PAGE
 elif page == "new_plan":
