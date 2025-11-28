@@ -848,11 +848,11 @@ if not st.session_state.get("logged_in", False):
         # --- CENTERED LOGO ONLY ON AUTH PAGES ---
         st.markdown(
             f"""
-            <div style="text-align:center; margin-top:1.5rem; margin-bottom:1.5rem;">
-                <img src="data:image/png;base64,{LOGO_BASE64}"
-                     style="width:380px; max-width:90%; height:auto; display:block; margin:0 auto;">
-            </div>
-            """,
+                    <div style="text-align:center; margin-top:1.5rem; margin-bottom:1.5rem;">
+                        <img src="data:image/png;base64,{LOGO_BASE64}"
+                             style="width:380px; max-width:90%; height:auto; display:block; margin:0 auto;">
+                    </div>
+                    """,
             unsafe_allow_html=True,
         )
         st.write("")
@@ -862,17 +862,23 @@ if not st.session_state.get("logged_in", False):
         users = load_users()
 
         # --- LOGIN FORM ---
-        with st.form("login_form"):
+        with st.form("login_form_main"):
             username_input = st.text_input(tr("login_username"))
             password_input = st.text_input(tr("login_password"), type="password")
-            submit_login = st.form_submit_button(tr("login_button"))
+            submit_login = st.form_submit_button(tr("login_button"), use_container_width=True)
 
-        # --- ACTION BUTTONS UNDER FORM ---
-        c1, c2, c3 = st.columns([1, 1, 1])
-        with c1:
-            signup_clicked = st.button(tr("login_new_user_cta"))
-        with c3:
-            forgot_clicked = st.button(tr("login_forgot_password"))
+        # --- EXTRA ACTIONS UNDER THE FORM (VERTICAL) ---
+        st.write("")  # μικρό κενό
+
+        # 1) Μεγάλο κουμπί για νέα εγγραφή (full width)
+        signup_clicked = st.button(tr("login_new_user_cta"), use_container_width=True)
+
+        # 2) "Ξέχασες τον κωδικό;" πιο ελαφρύ κουμπί (secondary)
+        forgot_clicked = st.button(
+            tr("login_forgot_password"),
+            type="secondary",
+            use_container_width=True,
+        )
 
         if signup_clicked:
             st.session_state["page"] = "signup"
