@@ -54,6 +54,14 @@ def get_base64_logo(path: str) -> str:
         return base64.b64encode(f.read()).decode("utf-8")
 
 LOGO_BASE64 = get_base64_logo("assets/logo.png")
+
+def load_base64_image(path):
+    with open(path, "rb") as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+BG_BASE64 = load_base64_image("assets/bg_pattern.png")
+
 # ----------------- CONFIG & OPENAI -----------------
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
@@ -64,6 +72,47 @@ st.set_page_config(
     page_icon="🍽️",
     layout="wide",
 )
+
+st.markdown(
+    f"""
+    <style>
+    /* 1) Pattern background σε όλη τη σελίδα */
+    body {{
+        background-image: url('data:image/png;base64,{BG_BASE64}');
+        background-size: 120px 120px;
+        background-repeat: repeat;
+        background-attachment: fixed;
+    }}
+
+    .stApp {{
+        background: transparent;
+    }}
+
+    .main .block-container {{
+        background: transparent;
+        padding-top: 2rem;
+    }}
+
+            /* 🔹 Panel για ΟΛΕΣ τις φόρμες (login, signup κτλ.) */
+    [data-testid="stForm"] {{
+        max-width: 480px;
+        margin: 2.5rem auto 3rem auto;   /* κέντρο + αποστάσεις */
+        background: rgba(0, 0, 0, 0.82);
+        border-radius: 18px;
+        padding: 1.8rem 2.2rem;
+        box-shadow: 0 0 25px rgba(0, 0, 0, 0.55);
+    }}
+
+    [data-testid="stForm"] * {{
+        color: #F7F7F7 !important;
+    }}
+
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 
 st.markdown(
     """
@@ -748,7 +797,8 @@ def signup_page():
                 st.session_state["page"] = "login"
                 st.session_state["logged_in"] = False
                 st.rerun()
-
+        # 🔥 PANEL WRAPPER — τελειώνει εδώ
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 
@@ -908,11 +958,11 @@ if st.session_state["logged_in"]:
 
 # ----------------- TITLE -----------------
 st.markdown(
-    f"<h1 style='text-align:center; margin-top:1.0rem;'>{tr('title')}</h1>",
+    f"<h1 style='text-align:center; margin-top:1.0rem; color:#111; text-shadow:0 0 6px rgba(255,255,255,0.6);'>{tr('title')}</h1>",
     unsafe_allow_html=True,
 )
 st.markdown(
-    f"<p style='text-align:center; opacity:0.85;'>{tr('subtitle')}</p>",
+    f"<p style='text-align:center; opacity:0.85;color:#111; text-shadow:0 0 6px rgba(255,255,255,0.6);'>{tr('subtitle')}</p>",
     unsafe_allow_html=True,
 )
 
@@ -931,46 +981,52 @@ if not st.session_state.get("logged_in", False):
         signup_page()
         st.stop()
 
-    # 3) Otherwise show LOGIN
+    # 3) Διαφορετικά: LOGIN
     st.session_state["page"] = "login"
 
     outer_left, outer_center, outer_right = st.columns([1, 2, 1])
     with outer_center:
-        # --- CENTERED LOGO ONLY ON AUTH PAGES ---
+
+        # --- LOGO πάνω από τη φόρμα ---
         st.markdown(
             f"""
-                    <div style="text-align:center; margin-top:1.5rem; margin-bottom:1.5rem;">
-                        <img src="data:image/png;base64,{LOGO_BASE64}"
-                             style="width:380px; max-width:90%; height:auto; display:block; margin:0 auto;">
-                    </div>
-                    """,
+            <div style="text-align:center; margin-top:1.5rem; margin-bottom:1.5rem;">
+                <img src="data:image/png;base64,{LOGO_BASE64}"
+                     style="width:380px; max-width:90%; height:auto; display:block; margin:0 auto;">
+            </div>
+            """,
             unsafe_allow_html=True,
         )
         st.write("")
 
-        st.subheader(tr("login_title"))
-
         users = load_users()
 
-        # --- LOGIN FORM ---
+        # --- LOGIN FORM (ΟΛΑ ΜΕΣΑ ΣΤΟ ΙΔΙΟ ΠΛΑΙΣΙΟ) ---
         with st.form("login_form_main"):
+            st.subheader(tr("login_title"))  # ΤΙΤΛΟΣ ΜΕΣΑ ΣΤΗ ΦΟΡΜΑ
+
             username_input = st.text_input(tr("login_username"))
             password_input = st.text_input(tr("login_password"), type="password")
-            submit_login = st.form_submit_button(tr("login_button"), use_container_width=True)
 
-        # --- EXTRA ACTIONS UNDER THE FORM (VERTICAL) ---
-        st.write("")  # μικρό κενό
+            # Κουμπί Σύνδεσης
+            submit_login = st.form_submit_button(
+                tr("login_button"),
+                use_container_width=True,
+            )
 
-        # 1) Μεγάλο κουμπί για νέα εγγραφή (full width)
-        signup_clicked = st.button(tr("login_new_user_cta"), use_container_width=True)
+            # Κουμπί: Νέος χρήστης
+            signup_clicked = st.form_submit_button(
+                tr("login_new_user_cta"),
+                use_container_width=True,
+            )
 
-        # 2) "Ξέχασες τον κωδικό;" πιο ελαφρύ κουμπί (secondary)
-        forgot_clicked = st.button(
-            tr("login_forgot_password"),
-            type="secondary",
-            use_container_width=True,
-        )
+            # Κουμπί: Ξέχασες τον κωδικό;
+            forgot_clicked = st.form_submit_button(
+                tr("login_forgot_password"),
+                use_container_width=True,
+            )
 
+        # --- Routing για τα δύο βοηθητικά κουμπιά ---
         if signup_clicked:
             st.session_state["page"] = "signup"
             st.rerun()
