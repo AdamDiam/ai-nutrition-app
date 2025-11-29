@@ -65,6 +65,29 @@ st.set_page_config(
     layout="wide",
 )
 
+st.markdown(
+    """
+    <style>
+    /* Κάνει κόκκινο ΜΟΝΟ το κουμπί μέσα στο delete-section */
+    .delete-section button {
+        background-color: #b91c1c !important;
+        border-color: #b91c1c !important;
+        color: white !important;
+    }
+
+    /* Στυλ για "popup" κάρτα επιβεβαίωσης */
+    .delete-confirm-card {
+        border: 1px solid #b91c1c;
+        background-color: #0f172a;
+        padding: 1.2rem;
+        border-radius: 0.75rem;
+        margin-top: 0.75rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ----------------- LANGUAGE TEXTS -----------------
 if "lang" not in st.session_state:
     st.session_state["lang"] = "el"
@@ -510,6 +533,61 @@ def save_profile(username: str):
     df.to_csv(PROFILE_FILE, index=False)
     return True
 
+def delete_account(username: str):
+    """Delete user completely and log them out."""
+    username = (username or "").strip()
+    if not username:
+        return
+
+    # 1) Remove from users.json
+    users = load_users()
+    if username in users:
+        del users[username]
+        save_users(users)
+
+    # 2) Remove user-specific data folder (if you use one)
+    import os, shutil
+    user_folder = f"user_data/{username}"
+    if os.path.exists(user_folder):
+        shutil.rmtree(user_folder)
+
+    # 3) Clear session and go to login
+    st.session_state["logged_in"] = False
+    st.session_state["username"] = ""
+    st.session_state["page"] = "login"
+
+    st.success("Ο λογαριασμός σου διαγράφηκε με επιτυχία.")
+    st.rerun()
+
+@st.dialog("⚠️ Διαγραφή λογαριασμού")
+def delete_dialog(username: str):
+    st.write(
+        "Αυτή η ενέργεια **δεν μπορεί να αναιρεθεί**. "
+        "Όλα τα δεδομένα σου θα χαθούν οριστικά."
+    )
+
+    confirm_text = st.text_input(
+        "Για επιβεβαίωση, γράψε το όνομα χρήστη σου:",
+        placeholder=username,
+        key="dialog_delete_confirm_input",
+    )
+
+    col1, col2 = st.columns(2)
+    with col1:
+        confirm = st.button("Ναι, διαγραφή", key="dialog_do_delete")
+    with col2:
+        cancel = st.button("Άκυρο", key="dialog_cancel_delete")
+
+    if confirm:
+        if confirm_text.strip().lower() == username.lower():
+            delete_account(username)
+        else:
+            st.error("Το όνομα χρήστη δεν ταιριάζει. Η διαγραφή ακυρώθηκε.")
+
+    if cancel:
+        # Κλείνει το dialog χωρίς να κάνει τίποτα
+        st.rerun()
+
 def admin_page():
     st.title("🛠 Admin Panel")
 
@@ -615,10 +693,15 @@ def admin_page():
 def signup_page():
     users = load_users()
 
+    # flag για επιτυχημένη εγγραφή
+    if "signup_success" not in st.session_state:
+        st.session_state["signup_success"] = False
+
     left, center, right = st.columns([1, 2, 1])
     with center:
         st.title(tr("signup_title"))
 
+        # ---- SIGNUP FORM ----
         with st.form("signup_form"):
             username = st.text_input(tr("signup_username")).strip()
             fullname = st.text_input(tr("signup_fullname")).strip()
@@ -629,6 +712,7 @@ def signup_page():
             ).strip()
             submit_signup = st.form_submit_button(tr("signup_button"))
 
+        # ---- HANDLE SUBMIT ----
         if submit_signup:
             if not username:
                 st.error(tr("signup_err_username_missing"))
@@ -653,11 +737,18 @@ def signup_page():
                 "security_answer": security_answer.lower(),
             }
             save_users(users)
+
+            st.session_state["signup_success"] = True
             st.success(tr("signup_success"))
 
+        # ---- BACK TO LOGIN BUTTON (πάντα έξω από το if submit_signup) ----
+        if st.session_state["signup_success"]:
             if st.button(tr("signup_back_to_login")):
+                st.session_state["signup_success"] = False
                 st.session_state["page"] = "login"
+                st.session_state["logged_in"] = False
                 st.rerun()
+
 
 
 
@@ -782,10 +873,10 @@ if st.session_state["logged_in"]:
         st.markdown("---")
 
         # Κύριες ενέργειες
-        if st.button(tr("menu_home"), use_container_width=True, type="primary"):
+        if st.button(tr("menu_home"), use_container_width=True, type="secondary"):
             st.session_state["page"] = "home"
 
-        if st.button(tr("menu_new_plan"), use_container_width=True, type="primary"):
+        if st.button(tr("menu_new_plan"), use_container_width=True, type="secondary"):
             st.session_state["page"] = "new_plan"
 
         st.markdown("---")
@@ -941,7 +1032,7 @@ if page == "home":
     primary_cta = st.button(
         "📅 " + tr("home_new_plan"),
         use_container_width=True,
-        type="primary",
+        type="secondary",
     )
     if primary_cta:
         st.session_state["page"] = "new_plan"
@@ -1079,6 +1170,59 @@ elif page == "profile":
         else:
             save_profile(st.session_state["username"])
             st.success(tr("profile_saved"))
+
+    st.write("---")
+
+    # ---------- DELETE ACCOUNT SECTION ----------
+    col_title, col_btn = st.columns([4, 1])
+    with col_title:
+        st.subheader("⚠️ Διαγραφή λογαριασμού")
+        st.caption("Αυτή η ενέργεια είναι οριστική και δεν μπορεί να αναιρεθεί.")
+    with col_btn:
+        delete_clicked = st.button(
+            "🗑️ Διαγραφή",
+            key="open_delete",
+            use_container_width=True,
+            type="primary",  # <-- αυτό
+        )
+
+    if delete_clicked:
+        delete_dialog(st.session_state.get("username", ""))
+
+    if st.session_state.get("confirm_delete", False):
+        # "Popup-style" block – σαν διάλογος επιβεβαίωσης
+        st.error(
+            "### Είσαι σίγουρος ότι θέλεις να διαγράψεις τον λογαριασμό σου;\n"
+            "Αυτή η ενέργεια **δεν μπορεί να αναιρεθεί**. Όλα τα δεδομένα σου θα χαθούν.",
+            icon="⚠️",
+        )
+
+        username = st.session_state.get("username", "")
+        confirm_text = st.text_input(
+            "Για επιβεβαίωση, γράψε το όνομα χρήστη σου:",
+            placeholder=username,
+            key="delete_confirm_input",
+        )
+
+        c1, c2 = st.columns(2)
+        with c1:
+            confirm_delete = st.button("Ναι, διαγραφή", key="do_delete")
+        with c2:
+            cancel_delete = st.button("Άκυρο", key="cancel_delete")
+
+        if confirm_delete:
+            if confirm_text.strip().lower() == username.lower():
+                st.session_state["confirm_delete"] = False
+                delete_account(username)
+            else:
+                st.error("Το όνομα χρήστη δεν ταιριάζει. Η διαγραφή ακυρώθηκε.")
+                st.session_state["confirm_delete"] = False
+
+        if cancel_delete:
+            st.session_state["confirm_delete"] = False
+            st.rerun()
+
+
 # ADMIN PAGE
 elif page == "admin":
     # extra safety: only allow admin role
