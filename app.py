@@ -76,7 +76,7 @@ st.set_page_config(
 st.markdown(
     f"""
     <style>
-    /* 1) Pattern background σε όλη τη σελίδα */
+    /* 1) Pattern background */
     body {{
         background-image: url('data:image/png;base64,{BG_BASE64}');
         background-size: 120px 120px;
@@ -93,25 +93,38 @@ st.markdown(
         padding-top: 2rem;
     }}
 
-            /* 🔹 Panel για ΟΛΕΣ τις φόρμες (login, signup κτλ.) */
+    /* 🔹 Panel για ΟΛΕΣ τις φόρμες (login, signup κτλ.) */
     [data-testid="stForm"] {{
         max-width: 480px;
-        margin: 2.5rem auto 3rem auto;   /* κέντρο + αποστάσεις */
+        margin: 2.5rem auto 3rem auto;
         background: rgba(0, 0, 0, 0.82);
         border-radius: 18px;
         padding: 1.8rem 2.2rem;
         box-shadow: 0 0 25px rgba(0, 0, 0, 0.55);
     }}
 
+    /* 🔸 ΟΛΟ το κείμενο μέσα στο panel να είναι ΛΕΥΚΟ */
     [data-testid="stForm"] * {{
-        color: #F7F7F7 !important;
+        color: #FFFFFF !important;
+        font-weight: 600 !important;
     }}
 
+    /* Input text να είναι λευκό */
+    input, textarea {{
+        color: #FFFFFF !important;
+    }}
+
+    /* White placeholders */
+    input::placeholder, textarea::placeholder {{
+        color: #EEEEEE !important;
+        opacity: 1 !important;
+    }}
 
     </style>
     """,
     unsafe_allow_html=True,
 )
+
 
 
 st.markdown(
