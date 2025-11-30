@@ -257,6 +257,26 @@ TEXT = {
 
         # Logout
         "logout_button": "🚪 Αποσύνδεση",
+        "onboard_title": "👋 Καλώς ήρθες στο 02Hero",
+        "onboard_body": """
+        Καλώς ήρθες στο 02Hero Nutrition Helper! 🧠💪  
+        
+        ### Πρώτη φορά – τι να κάνεις:
+        1. Συμπλήρωσε τα βασικά στοιχεία σου (ηλικία, βάρος, στόχο κτλ.).
+        2. Πάτα **"Υπολογισμός & Πρόγραμμα AI"** για να φτιάξει το AI το εβδομαδιαίο πλάνο σου.
+        3. Κατέβασε αν θέλεις:
+           - το πλάνο σε **Excel**
+           - τη **λίστα αγορών** για το σούπερ μάρκετ.
+        
+        ### Τι θα ξεκλειδώσεις μετά:
+        - Μετά την πρώτη αποθήκευση θα εμφανιστεί η σελίδα **"Καταγραφή Προόδου"**  
+          όπου βλέπεις αλλαγή βάρους & παλαιότερα πλάνα.
+        - Στο **"Προφίλ"** μπορείς να αλλάζεις ανά πάσα στιγμή τα στοιχεία σου.
+        
+        Καλή αρχή! 🚀
+        """,
+        "onboard_button": "Ξεκινάμε 🚀",
+
     },
     "en": {
         "security_question": "What is your favourite color?",
@@ -389,6 +409,25 @@ TEXT = {
 
         # Logout
         "logout_button": "🚪 Logout",
+        "onboard_title": "👋 Welcome to 02Hero",
+        "onboard_body": """
+        Welcome to the 02Hero Nutrition Helper! 🧠💪  
+        
+        ### First time using the app? Here’s what to do:
+        1. Fill in your basic details (age, weight, goal, etc.).
+        2. Press **“Calculate & AI Meal Plan”** to generate your weekly plan.
+        3. You can download:
+           - the full plan in **Excel**
+           - the **shopping list** for the supermarket.
+        
+        ### What unlocks after the first save:
+        - After saving your first plan, the **Progress Tracking** page becomes available.
+        - From your **Profile**, you can update your data anytime.
+        
+        Ready to start? 🚀
+        """,
+        "onboard_button": "Let's start 🚀",
+
     },
 }
 
@@ -619,6 +658,14 @@ def delete_dialog(username: str):
         # Κλείνει το dialog χωρίς να κάνει τίποτα
         st.rerun()
 
+@st.dialog(tr("onboard_title"))
+def onboarding_dialog():
+    st.write(tr("onboard_body"))
+
+    if st.button(tr("onboard_button"), use_container_width=True):
+        st.session_state["onboarding_seen"] = True
+        st.rerun()
+
 def admin_page():
     st.title("🛠 Admin Panel")
 
@@ -842,15 +889,16 @@ def forgot_password_page():
 # ----------------- SESSION STATE -----------------
 defaults = {
     "username": "",
-    "age": 27,
+    "age": 25,
     "sex": "male",
-    "height": 170,
-    "weight": 79.0,
+    "height": 175,
+    "weight": 70.0,
     "activity": "Medium",
-    "goal": "Lose fat",
+    "goal": "Maintain",
     "allergies": "",
     "preferred_foods": "",
 }
+
 for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
@@ -871,6 +919,9 @@ if "role" not in st.session_state:
     st.session_state["role"] = "user"
 if "new_user" not in st.session_state:
     st.session_state["new_user"] = False
+if "onboarding_seen" not in st.session_state:
+    st.session_state["onboarding_seen"] = False
+
 
 # ----------------- LANGUAGE BUTTONS (πάνω αριστερά) -----------------
 lang_col1, _ = st.columns([0.15, 0.85])
@@ -1086,7 +1137,14 @@ if not st.session_state.get("logged_in", False) and page != "login":
     page = "login"
     st.session_state["page"] = "login"
 
-st.write("DEBUG:", st.session_state.get("page"), st.session_state.get("logged_in"))  # 👈 ΕΔΩ
+# Αν είναι νέος χρήστης, έχει συνδεθεί, είναι στο new_plan και δεν έχει δει ακόμα το onboarding → δείξε popup
+if (
+    st.session_state.get("logged_in", False)
+    and st.session_state.get("new_user", False)
+    and not st.session_state.get("onboarding_seen", False)
+    and page == "new_plan"
+):
+    onboarding_dialog()
 
 # HOME / DASHBOARD
 if page == "home":
