@@ -3,34 +3,66 @@
         "password": "$2b$12$85GS.V1N1uObj5YiyLuV1u/74928fXQ6srun6NHmlPlaZI7gFGpvC",
         "fullname": "Adam Diam",
         "role": "admin",
-        "last_login": "2025-11-29T19:30:16.915568",
+        "last_login": "2025-11-30T13:32:49.688893",
         "security_answer": "blue"
     },
     "Demo": {
         "password": "$2b$12$rXf59xqaTXLP0MzPiZhyp.QRJDtl6RQAzublKDOmP0UVjWBsJwLGq",
         "fullname": "Demo",
         "role": "user",
-        "last_login": "2025-11-29T17:22:56.482036",
+        "last_login": "2025-11-30T13:28:43.772181",
         "security_answer": "blue"
-    },
-    "test2": {
-        "password": "$2b$12$ZjpPHeUe02oFXzBt7tBrzORbsrmYt6FB/h.seadrgCuKKFVwJ1CpO",
-        "fullname": "",
-        "role": "user",
-        "security_answer": "blue",
-        "last_login": "2025-11-29T08:54:31.493927"
     },
     "test3": {
         "password": "$2b$12$pct9pJj/yCe0dpNli2w7TOsakf/kyaqkLtOiFb2lKNAt87dr931Ci",
         "fullname": "",
         "role": "user",
-        "security_answer": "blue"
+        "security_answer": "blue",
+        "last_login": "2025-11-30T12:04:54.445865"
     },
     "Sofi": {
         "password": "$2b$12$nCx8kWkHBHysEMpjmQJBtuspy.2M02Xtl0eJEqiBW2CnedWW8QHdC",
         "fullname": "Sofia Diamantidou",
         "role": "user",
         "security_answer": "blue",
-        "last_login": "2025-11-29T16:06:44.860371"
+        "last_login": "2025-11-30T13:20:03.839658"
+    },
+    "test1": {
+        "password": "$2b$12$gMMr4bSZRFnlrr29uetlkeF4c1ye5g3LRs29/MlpUc3OX0aeKNOTW",
+        "fullname": "test1",
+        "role": "user",
+        "security_answer": "blue",
+        "last_login": "2025-11-30T12:34:15.640785"
+    },
+    "test4": {
+        "password": "$2b$12$NOTg36JS60oablJjHpfZa.SYcBDwEcN4ShmLg5z5esj8Hb4V3fZAi",
+        "fullname": "test4",
+        "role": "user",
+        "security_answer": "blue"
+    },
+    "test5": {
+        "password": "$2b$12$HGgzOPpaci8ipAgHAlrkYuLvnAfdUAqGHKpzHwDwfiHXEtHFaOm9.",
+        "fullname": "test5",
+        "role": "user",
+        "security_answer": "blue",
+        "last_login": "2025-11-30T13:21:06.730599"
+    },
+    "test6": {
+        "password": "$2b$12$GSqN/QlIOseFSL7sLOQ1COmwbvN6sBsHzH/FlLUtE5APC.JrkI43i",
+        "fullname": "",
+        "role": "user",
+        "security_answer": "blue"
+    },
+    "test7": {
+        "password": "$2b$12$7XAb96h40zYpa8eIajcKV.3752YqNt3Q2LZSaDUiq0b3fXyo8xBIy",
+        "fullname": "",
+        "role": "user",
+        "security_answer": "b"
+    },
+    "test8": {
+        "password": "$2b$12$YuYgY91XeRj2jFqeUC6x4Ox1pi2WIEr4bnVA9bBxhmERJ/IWo7Fhy",
+        "fullname": "",
+        "role": "user",
+        "security_answer": "blue"
     }
 }

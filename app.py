@@ -16,9 +16,9 @@ from openai import OpenAI
 import base64
 import json
 import bcrypt
+import shutil
 
 USERS_FILE = "users.json"
-SECURITY_QUESTION = "What is your favourite color?"
 
 def get_security_question() -> str:
     return tr("security_question")
@@ -49,17 +49,12 @@ def update_last_login(username: str):
         users[username]["last_login"] = datetime.utcnow().isoformat()
         save_users(users)
 
-def get_base64_logo(path: str) -> str:
+def load_base64(path: str) -> str:
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8")
 
-LOGO_BASE64 = get_base64_logo("assets/logo.png")
-
-def load_base64_image(path: str) -> str:
-    with open(path, "rb") as f:
-        return base64.b64encode(f.read()).decode("utf-8")
-
-BG_BASE64 = load_base64_image("assets/bg_pattern.png")
+LOGO_BASE64 = load_base64("assets/logo.png")
+BG_BASE64   = load_base64("assets/bg_pattern.png")
 
 # ----------------- CONFIG & OPENAI -----------------
 load_dotenv()
@@ -200,8 +195,6 @@ TEXT = {
         "saved_err_no_user": "Βάλε πρώτα όνομα χρήστη για να αποθηκεύσω το ιστορικό.",
         "history_plan_label": "Δες παλιό πρόγραμμα από:",
         "history_no_plan": "Δεν βρέθηκε αποθηκευμένο πρόγραμμα για αυτή την εγγραφή.",
-        "login_title": "Σύνδεση",
-        "login_button": "Συνέχεια",
         "home_welcome": "Καλώς ήρθες",
         "home_new_plan": "Δημιούργησε νέο πρόγραμμα διατροφής",
         "home_progress": "Κατέγραψε την πρόοδό σου",
@@ -261,10 +254,6 @@ TEXT = {
         "forgot_err_password_mismatch": "Οι κωδικοί δεν ταιριάζουν.",
         "forgot_success": "✅ Ο κωδικός ενημερώθηκε. Μπορείς τώρα να συνδεθείς.",
         "forgot_back_to_login": "Πίσω στη σελίδα σύνδεσης",
-
-        # Security question (που έχουμε ήδη)
-        "security_question": "Ποιο είναι το αγαπημένο σου χρώμα;",
-        "security_answer_label": "Απάντηση στη μυστική ερώτηση",
 
         # Logout
         "logout_button": "🚪 Αποσύνδεση",
@@ -587,7 +576,6 @@ def delete_account(username: str):
         save_users(users)
 
     # 2) Remove user-specific data folder (if you use one)
-    import os, shutil
     user_folder = f"user_data/{username}"
     if os.path.exists(user_folder):
         shutil.rmtree(user_folder)
@@ -595,6 +583,8 @@ def delete_account(username: str):
     # 3) Clear session and go to login
     st.session_state["logged_in"] = False
     st.session_state["username"] = ""
+    st.session_state["role"] = "user"
+    st.session_state["new_user"] = False
     st.session_state["page"] = "login"
 
     st.success("Ο λογαριασμός σου διαγράφηκε με επιτυχία.")
@@ -734,10 +724,6 @@ def admin_page():
 def signup_page():
     users = load_users()
 
-    # flag για επιτυχημένη εγγραφή
-    if "signup_success" not in st.session_state:
-        st.session_state["signup_success"] = False
-
     left, center, right = st.columns([1, 2, 1])
     with center:
         st.title(tr("signup_title"))
@@ -779,18 +765,15 @@ def signup_page():
             }
             save_users(users)
 
-            st.session_state["signup_success"] = True
+            # αυτόματο login νέου χρήστη
+            st.session_state["logged_in"] = True
+            st.session_state["username"] = username
+            st.session_state["role"] = "user"
+            st.session_state["new_user"] = True
+            st.session_state["page"] = "new_plan"
+
             st.success(tr("signup_success"))
-
-        # ---- BACK TO LOGIN BUTTON (πάντα έξω από το if submit_signup) ----
-        if st.session_state["signup_success"]:
-            if st.button(tr("signup_back_to_login")):
-                st.session_state["signup_success"] = False
-                st.session_state["page"] = "login"
-                st.session_state["logged_in"] = False
-                st.rerun()
-
-
+            st.rerun()
 
 
 def forgot_password_page():
@@ -884,6 +867,10 @@ if "page" not in st.session_state:
     st.session_state["page"] = "login"
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
+if "role" not in st.session_state:
+    st.session_state["role"] = "user"
+if "new_user" not in st.session_state:
+    st.session_state["new_user"] = False
 
 # ----------------- LANGUAGE BUTTONS (πάνω αριστερά) -----------------
 lang_col1, _ = st.columns([0.15, 0.85])
@@ -910,40 +897,67 @@ if st.session_state["logged_in"]:
 
         st.markdown("---")
         st.markdown(f"**{tr('sidebar_title')}**")
-        st.markdown(f"<span style='font-size:0.85rem; opacity:0.8;'>{tr('sidebar_sub')}</span>", unsafe_allow_html=True)
+        st.markdown(
+            f"<span style='font-size:0.85rem; opacity:0.8;'>{tr('sidebar_sub')}</span>",
+            unsafe_allow_html=True,
+        )
         st.markdown("---")
 
-        # Κύριες ενέργειες
-        if st.button(tr("menu_home"), use_container_width=True, type="secondary"):
-            st.session_state["page"] = "home"
+        is_new = st.session_state.get("new_user", False)
 
-        if st.button(tr("menu_new_plan"), use_container_width=True, type="secondary"):
-            st.session_state["page"] = "new_plan"
-
-        st.markdown("---")
-
-        # Δευτερεύουσες επιλογές
-        if st.button(tr("menu_progress"), use_container_width=True):
-            st.session_state["page"] = "progress"
-
-        if st.button(tr("menu_profile"), use_container_width=True):
-            st.session_state["page"] = "profile"
-
-        if st.button(tr("menu_about"), use_container_width=True):
-            st.session_state["page"] = "about"
-
-        # --- ADMIN BUTTON (only for admin role) ---
-        if st.session_state.get("role") == "admin":
-            st.markdown("---")
-            if st.button("🛠 Admin panel", use_container_width=True):
-                st.session_state["page"] = "admin"
+        if is_new:
+            # 👉 ΝΕΟΣ χρήστης: μόνο Νέο Πλάνο, Προφίλ, Σχετικά
+            if st.button(tr("menu_new_plan"), use_container_width=True, type="secondary"):
+                st.session_state["page"] = "new_plan"
                 st.rerun()
+
+            st.markdown("---")
+
+            if st.button(tr("menu_profile"), use_container_width=True):
+                st.session_state["page"] = "profile"
+                st.rerun()
+
+            if st.button(tr("menu_about"), use_container_width=True):
+                st.session_state["page"] = "about"
+                st.rerun()
+
+        else:
+            # 👉 ΚΑΝΟΝΙΚΟΣ χρήστης: πλήρες μενού
+            if st.button(tr("menu_home"), use_container_width=True, type="secondary"):
+                st.session_state["page"] = "home"
+                st.rerun()
+
+            if st.button(tr("menu_new_plan"), use_container_width=True, type="secondary"):
+                st.session_state["page"] = "new_plan"
+                st.rerun()
+
+            st.markdown("---")
+
+            if st.button(tr("menu_progress"), use_container_width=True):
+                st.session_state["page"] = "progress"
+                st.rerun()
+
+            if st.button(tr("menu_profile"), use_container_width=True):
+                st.session_state["page"] = "profile"
+                st.rerun()
+
+            if st.button(tr("menu_about"), use_container_width=True):
+                st.session_state["page"] = "about"
+                st.rerun()
+
+            # --- ADMIN BUTTON (only for admin role) ---
+            if st.session_state.get("role") == "admin":
+                st.markdown("---")
+                if st.button("🛠 Admin panel", use_container_width=True):
+                    st.session_state["page"] = "admin"
+                    st.rerun()
 
         st.markdown("---")
         if st.button(tr("logout_button"), use_container_width=True):
             st.session_state["logged_in"] = False
             st.session_state["username"] = ""
             st.session_state["role"] = "user"
+            st.session_state["new_user"] = False
             st.session_state["page"] = "login"
             st.rerun()
 
@@ -993,24 +1007,26 @@ if not st.session_state.get("logged_in", False):
 
         users = load_users()
 
-        # --- LOGIN FORM ---
         with st.form("login_form_main"):
             username_input = st.text_input(tr("login_username"))
             password_input = st.text_input(tr("login_password"), type="password")
-            submit_login = st.form_submit_button(tr("login_button"), use_container_width=True)
 
-        # --- EXTRA ACTIONS UNDER THE FORM (VERTICAL) ---
-        st.write("")  # μικρό κενό
+            submit_login = st.form_submit_button(
+                tr("login_button"),
+                use_container_width=True
+            )
 
-        # 1) Μεγάλο κουμπί για νέα εγγραφή (full width)
-        signup_clicked = st.button(tr("login_new_user_cta"), use_container_width=True)
+            st.write("")  # μικρό κενό
 
-        # 2) "Ξέχασες τον κωδικό;" πιο ελαφρύ κουμπί (secondary)
-        forgot_clicked = st.button(
-            tr("login_forgot_password"),
-            type="secondary",
-            use_container_width=True,
-        )
+            signup_clicked = st.form_submit_button(
+                tr("login_new_user_cta"),
+                use_container_width=True,
+            )
+
+            forgot_clicked = st.form_submit_button(
+                tr("login_forgot_password"),
+                use_container_width=True,
+            )
 
         if signup_clicked:
             st.session_state["page"] = "signup"
@@ -1047,14 +1063,30 @@ if not st.session_state.get("logged_in", False):
                         st.session_state["role"] = users[actual_key].get("role", "user")
                         update_last_login(actual_key)
                         load_profile(actual_key)
-                        st.session_state["page"] = "home"
-                        st.rerun()
 
-    st.stop()
+                        # 👉 Όλοι οι “normal” χρήστες πάνε στο new_plan
+                        if st.session_state["role"] == "admin":
+                            st.session_state["page"] = "admin"
+                        else:
+                            st.session_state["page"] = "new_plan"
+
+                        st.rerun()
 
 # ----------------- ROUTING ΑΝΑΛΟΓΑ ΜΕ ΤΗ ΣΕΛΙΔΑ -----------------
 
-page = st.session_state["page"]
+page = st.session_state.get("page", "login")
+
+# Αν είμαι logged_in αλλά έχω σελίδα login / signup / forgot, στείλε με στο new_plan
+if st.session_state.get("logged_in", False) and page in {"login", "signup", "forgot_password"}:
+    page = "new_plan"
+    st.session_state["page"] = "new_plan"
+
+# Αν ΔΕΝ είμαι logged_in, βεβαιώσου ότι είμαι στη login
+if not st.session_state.get("logged_in", False) and page != "login":
+    page = "login"
+    st.session_state["page"] = "login"
+
+st.write("DEBUG:", st.session_state.get("page"), st.session_state.get("logged_in"))  # 👈 ΕΔΩ
 
 # HOME / DASHBOARD
 if page == "home":
@@ -1069,7 +1101,6 @@ if page == "home":
     st.write("")
     st.markdown("### 🚀 Ξεκίνα από εδώ")
 
-    # Κύριο, μεγάλο CTA – μόνο του
     primary_cta = st.button(
         "📅 " + tr("home_new_plan"),
         use_container_width=True,
@@ -1082,7 +1113,6 @@ if page == "home":
     st.write("")
     st.markdown("### Άλλες επιλογές")
 
-    # ΟΛΕΣ οι άλλες επιλογές κάθετα μία-μία
     if st.button("📈 " + tr("home_progress"), use_container_width=True):
         st.session_state["page"] = "progress"
         st.rerun()
@@ -1229,40 +1259,6 @@ elif page == "profile":
 
     if delete_clicked:
         delete_dialog(st.session_state.get("username", ""))
-
-    if st.session_state.get("confirm_delete", False):
-        # "Popup-style" block – σαν διάλογος επιβεβαίωσης
-        st.error(
-            "### Είσαι σίγουρος ότι θέλεις να διαγράψεις τον λογαριασμό σου;\n"
-            "Αυτή η ενέργεια **δεν μπορεί να αναιρεθεί**. Όλα τα δεδομένα σου θα χαθούν.",
-            icon="⚠️",
-        )
-
-        username = st.session_state.get("username", "")
-        confirm_text = st.text_input(
-            "Για επιβεβαίωση, γράψε το όνομα χρήστη σου:",
-            placeholder=username,
-            key="delete_confirm_input",
-        )
-
-        c1, c2 = st.columns(2)
-        with c1:
-            confirm_delete = st.button("Ναι, διαγραφή", key="do_delete")
-        with c2:
-            cancel_delete = st.button("Άκυρο", key="cancel_delete")
-
-        if confirm_delete:
-            if confirm_text.strip().lower() == username.lower():
-                st.session_state["confirm_delete"] = False
-                delete_account(username)
-            else:
-                st.error("Το όνομα χρήστη δεν ταιριάζει. Η διαγραφή ακυρώθηκε.")
-                st.session_state["confirm_delete"] = False
-
-        if cancel_delete:
-            st.session_state["confirm_delete"] = False
-            st.rerun()
-
 
 # ADMIN PAGE
 elif page == "admin":
@@ -1527,7 +1523,6 @@ Important:
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
                 df_plan.to_excel(writer, index=False, sheet_name="Diet Plan")
-                writer.close()
             st.download_button(
                 label=tr("download"),
                 data=buffer.getvalue(),
@@ -1577,6 +1572,8 @@ Important:
                 )
                 if ok:
                     st.success(tr("saved_ok"))
+                    # μετά την πρώτη αποθήκευση δεν θεωρείται πια "νέος"
+                    st.session_state["new_user"] = False
 
         st.write("---")
 
