@@ -18,6 +18,9 @@ import json
 import bcrypt
 import shutil
 
+if "signup_step" not in st.session_state:
+    st.session_state.signup_step = 1
+
 USERS_FILE = "users.json"
 
 def get_security_question() -> str:
@@ -104,25 +107,74 @@ st.markdown(
 st.markdown(
     """
     <style>
-    /* Κάνει κόκκινο ΜΟΝΟ το κουμπί μέσα στο delete-section */
-    .delete-section button {
-        background-color: #b91c1c !important;
-        border-color: #b91c1c !important;
-        color: white !important;
+    .signup-progress {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 1.5rem;
+        margin: 1.2rem 0 1.8rem 0;
+    }
+    .signup-progress .step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        font-size: 0.85rem;
+        color: #e5e7eb;
+        opacity: 0.5;
+        transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .signup-progress .step.active {
+        opacity: 1;
+        transform: translateY(-2px);
+    }
+    .signup-progress .circle {
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        border: 2px solid #64748b;
+        background: #020617;
+    }
+    /* ενεργό step = κόκκινο-μπλε σαν το logo */
+    .signup-progress .step.active .circle {
+        background: linear-gradient(135deg, #ef4444, #3b82f6);
+        border-color: transparent;
+        box-shadow: 0 0 15px rgba(248, 113, 113, 0.45);
+    }
+    .signup-progress .line {
+        flex: 1;
+        height: 3px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.35);
+        overflow: hidden;
+        position: relative;
+    }
+    .signup-progress .line.filled {
+        background: linear-gradient(90deg, #ef4444, #3b82f6);
     }
 
-    /* Στυλ για "popup" κάρτα επιβεβαίωσης */
-    .delete-confirm-card {
-        border: 1px solid #b91c1c;
-        background-color: #0f172a;
-        padding: 1.2rem;
-        border-radius: 0.75rem;
-        margin-top: 0.75rem;
+    /* fade-in container για τα περιεχόμενα κάθε βήματος */
+    .fade-container {
+        animation: fadeInStep 0.35s ease-out;
+    }
+    @keyframes fadeInStep {
+        from {
+            opacity: 0;
+            transform: translateY(6px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
 
 # ----------------- LANGUAGE TEXTS -----------------
 if "lang" not in st.session_state:
@@ -209,7 +261,9 @@ TEXT = {
         "progress_saved": "✅ Το βάρος σου για σήμερα αποθηκεύτηκε.",
         "security_question": "Ποιο είναι το αγαπημένο σου χρώμα;",
         "security_answer_label": "Απάντηση στην ερώτηση",
-# Auth – κοινά
+        "signup_step1_label": "1. Στοιχεία σύνδεσης",
+        "signup_step2_label": "2. Στοιχεία προφίλ",
+        # Auth – κοινά
         "login_title": "Σύνδεση",
         "login_username": "Όνομα χρήστη",
         "login_password": "Κωδικός",
@@ -427,7 +481,8 @@ TEXT = {
         Ready to start? 🚀
         """,
         "onboard_button": "Let's start 🚀",
-
+        "signup_step1_label": "1. Login details",
+        "signup_step2_label": "2. Profile details",
     },
 }
 
@@ -771,56 +826,169 @@ def admin_page():
 def signup_page():
     users = load_users()
 
+    # current step in signup wizard
+    if "signup_step" not in st.session_state:
+        st.session_state["signup_step"] = 1
+
+    # κεντράρισμα signup
     left, center, right = st.columns([1, 2, 1])
     with center:
         st.title(tr("signup_title"))
 
-        # ---- SIGNUP FORM ----
-        with st.form("signup_form"):
-            username = st.text_input(tr("signup_username")).strip()
-            fullname = st.text_input(tr("signup_fullname")).strip()
-            password = st.text_input(tr("signup_password"), type="password")
-            password2 = st.text_input(tr("signup_password_confirm"), type="password")
-            security_answer = st.text_input(
-                f"{tr('signup_security_answer')} ({get_security_question()})"
-            ).strip()
-            submit_signup = st.form_submit_button(tr("signup_button"))
+        step = st.session_state["signup_step"]
 
-        # ---- HANDLE SUBMIT ----
-        if submit_signup:
-            if not username:
-                st.error(tr("signup_err_username_missing"))
-                return
-            if username in users:
-                st.error(tr("signup_err_username_exists"))
-                return
-            if not password:
-                st.error(tr("signup_err_password_missing"))
-                return
-            if password != password2:
-                st.error(tr("signup_err_password_mismatch"))
-                return
-            if not security_answer:
-                st.error(tr("signup_err_security_missing"))
-                return
+        # -------- PROGRESS BAR (κόκκινο/μπλε) --------
+        step1_active = "active" if step >= 1 else ""
+        step2_active = "active" if step >= 2 else ""
+        line_filled = "filled" if step >= 2 else ""
 
-            users[username] = {
-                "password": hash_password(password),
-                "fullname": fullname,
-                "role": "user",
-                "security_answer": security_answer.lower(),
-            }
-            save_users(users)
+        st.markdown(
+            f"""
+            <div class="signup-progress">
+                <div class="step {step1_active}">
+                    <div class="circle">1</div>
+                    <div class="label">{tr('signup_step1_label')}</div>
+                </div>
+                <div class="line {line_filled}"></div>
+                <div class="step {step2_active}">
+                    <div class="circle">2</div>
+                    <div class="label">{tr('signup_step2_label')}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-            # αυτόματο login νέου χρήστη
-            st.session_state["logged_in"] = True
-            st.session_state["username"] = username
-            st.session_state["role"] = "user"
-            st.session_state["new_user"] = True
-            st.session_state["page"] = "new_plan"
+        # Ό,τι ακολουθεί (forms των βημάτων) μπαίνει στο fade container
+        st.markdown("<div class='fade-container'>", unsafe_allow_html=True)
 
-            st.success(tr("signup_success"))
-            st.rerun()
+        # ===================== STEP 1: CREDENTIALS =====================
+        if step == 1:
+            with st.form("signup_step1"):
+                username = st.text_input(tr("signup_username")).strip()
+                fullname = st.text_input(tr("signup_fullname")).strip()
+                password = st.text_input(tr("signup_password"), type="password")
+                password2 = st.text_input(tr("signup_password_confirm"), type="password")
+                security_answer = st.text_input(
+                    f"{tr('signup_security_answer')} ({get_security_question()})"
+                ).strip()
+
+                next_btn = st.form_submit_button(
+                    "➡️ Επόμενο βήμα" if st.session_state["lang"] == "el" else "➡️ Next step"
+                )
+
+            if next_btn:
+                # Validation
+                if not username:
+                    st.error(tr("signup_err_username_missing"))
+                    st.stop()
+                if username in users:
+                    st.error(tr("signup_err_username_exists"))
+                    st.stop()
+                if not password:
+                    st.error(tr("signup_err_password_missing"))
+                    st.stop()
+                if password != password2:
+                    st.error(tr("signup_err_password_mismatch"))
+                    st.stop()
+                if not security_answer:
+                    st.error(tr("signup_err_security_missing"))
+                    st.stop()
+
+                # Store temporary credentials στο session
+                st.session_state["temp_signup"] = {
+                    "username": username,
+                    "fullname": fullname,
+                    "password": password,
+                    "security_answer": security_answer,
+                }
+
+                st.session_state["signup_step"] = 2
+                st.rerun()
+
+        # ===================== STEP 2: PROFILE INFO =====================
+        elif step == 2:
+            # safety: αν πας κατευθείαν στο step 2 χωρίς temp data, γύρνα πίσω
+            if "temp_signup" not in st.session_state:
+                st.session_state["signup_step"] = 1
+                st.rerun()
+
+            with st.form("signup_step2"):
+                age = st.number_input(tr("age"), min_value=10, max_value=90, value=25)
+
+                sex_choice = st.selectbox(
+                    tr("sex"),
+                    [tr("male"), tr("female")],
+                    index=0,
+                )
+                sex = "male" if sex_choice == tr("male") else "female"
+
+                height = st.number_input(tr("height"), min_value=120, max_value=220, value=175)
+                weight = st.number_input(tr("weight"), min_value=40.0, max_value=200.0, value=70.0)
+
+                activity_opts = tr("activity_opts")
+                goal_opts = tr("goal_opts")
+
+                activity = st.selectbox(tr("activity"), activity_opts)
+                goal = st.selectbox(tr("goal"), goal_opts)
+
+                allergies = st.text_area(tr("allergies"), placeholder=tr("allergies_ph"))
+                preferred_foods = st.text_area(tr("prefs"), placeholder=tr("prefs_ph"))
+
+                col_back, col_finish = st.columns(2)
+                with col_back:
+                    back_btn = st.form_submit_button(
+                        "⬅️ Πίσω" if st.session_state["lang"] == "el" else "⬅️ Back"
+                    )
+                with col_finish:
+                    finish_btn = st.form_submit_button(tr("signup_button"))
+
+            if back_btn:
+                st.session_state["signup_step"] = 1
+                st.rerun()
+
+            if finish_btn:
+                data = st.session_state["temp_signup"]
+
+                # Save user credentials στο users.json
+                users[data["username"]] = {
+                    "password": hash_password(data["password"]),
+                    "fullname": data["fullname"],
+                    "role": "user",
+                    "security_answer": data["security_answer"].lower(),
+                }
+                save_users(users)
+
+                # Store profile data σε session
+                st.session_state.update({
+                    "username": data["username"],
+                    "logged_in": True,
+                    "role": "user",
+                    "new_user": True,
+                    "age": int(age),
+                    "sex": sex,
+                    "height": int(height),
+                    "weight": float(weight),
+                    "activity": activity,
+                    "goal": goal,
+                    "allergies": allergies,
+                    "preferred_foods": preferred_foods,
+                })
+
+                # Save σε profiles.csv
+                save_profile(data["username"])
+
+                # reset wizard
+                st.session_state["signup_step"] = 1
+                st.session_state.pop("temp_signup", None)
+
+                # πάμε κατευθείαν στο νέο πλάνο
+                st.session_state["page"] = "new_plan"
+                st.success(tr("signup_success"))
+                st.rerun()
+
+        # κλείσιμο fade container
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 def forgot_password_page():
