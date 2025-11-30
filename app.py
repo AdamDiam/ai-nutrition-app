@@ -53,8 +53,14 @@ def update_last_login(username: str):
         save_users(users)
 
 def load_base64(path: str) -> str:
-    with open(path, "rb") as f:
-        return base64.b64encode(f.read()).decode("utf-8")
+    """Γυρνάει base64 για εικόνες. Αν λείπει το αρχείο, δεν ρίχνει error."""
+    try:
+        with open(path, "rb") as f:
+            return base64.b64encode(f.read()).decode("utf-8")
+    except FileNotFoundError:
+        # Μπορείς να βάλεις εδώ ένα default χρώμα / κενό background
+        return ""
+
 
 LOGO_BASE64 = load_base64("assets/logo.png")
 BG_BASE64   = load_base64("assets/bg_pattern.png")
@@ -63,6 +69,12 @@ BG_BASE64   = load_base64("assets/bg_pattern.png")
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=api_key) if api_key else None
+
+# Μικρό banner αν δεν υπάρχει API key
+if not api_key:
+    st.error(
+        "Δεν βρέθηκε OPENAI_API_KEY."
+    )
 
 st.set_page_config(
     page_title="02Hero Nutrition Helper",
@@ -1554,125 +1566,128 @@ elif page == "new_plan":
             if not client:
                 st.error("OPENAI_API_KEY is missing in your .env file.")
             else:
-                with st.spinner(
-                    "Generating your plan with AI..."
-                    if st.session_state["lang"] == "en"
-                    else "Φτιάχνω το πρόγραμμα με AI..."
-                ):
-                    age = int(st.session_state["age"])
-                    sex = st.session_state["sex"]
-                    height = int(st.session_state["height"])
-                    weight = float(st.session_state["weight"])
-                    activity = st.session_state["activity"]
-                    goal = st.session_state["goal"]
-                    allergies = st.session_state["allergies"].strip()
-                    prefs = st.session_state["preferred_foods"].strip()
+                try:
+                    with st.spinner(
+                            "Generating your plan with AI..."
+                            if st.session_state["lang"] == "en"
+                            else "Φτιάχνω το πρόγραμμα με AI..."
+                    ):
+                        lang = st.session_state["lang"]
 
-                    targets = calculate_targets(age, sex, height, weight, activity, goal)
+                        age = int(st.session_state["age"])
+                        sex_raw = st.session_state["sex"]  # "male" ή "female"
+                        sex_gr = "άνδρας" if sex_raw == "male" else "γυναίκα"
+                        sex_en = "male" if sex_raw == "male" else "female"
+                        height = int(st.session_state["height"])
+                        weight = float(st.session_state["weight"])
+                        activity = st.session_state["activity"]
+                        goal = st.session_state["goal"]
+                        allergies = st.session_state["allergies"]
+                        prefs = st.session_state["preferred_foods"]
 
-                    lang = st.session_state["lang"]
+                        if lang == "el":
+                            plan_prompt = f"""
+                        Είμαι {age} ετών, {sex_gr}, ύψος {height} cm και βάρος {weight} kg.
+                        Επίπεδο δραστηριότητας: {activity}.
+                        Στόχος: {goal}.
 
-                    if lang == "el":
-                        allergies_text = allergies or "καμία συγκεκριμένη"
-                        prefs_text = prefs or "δεν δήλωσε συγκεκριμένα αγαπημένα φαγητά"
-                        header = "| Γεύμα / Ημέρα | " + " | ".join(DAY_LABELS["el"]) + " |"
-                        row_names = ", ".join(MEAL_LABELS["el"])
-                        user_desc = f"""
-Στοιχεία χρήστη:
-- Ηλικία: {age}
-- Φύλο: {sex}
-- Ύψος: {height} cm
-- Βάρος: {weight} kg
-- Δραστηριότητα: {activity}
-- Στόχος: {goal}
-- Αλλεργίες / τροφές προς αποφυγή: {allergies_text}
-- Αγαπημένα φαγητά: {prefs_text}
+                        Αλλεργίες / τρόφιμα προς αποφυγή: {allergies or "καμία"}.
+                        Αγαπημένα φαγητά: {prefs or "ό,τι ταιριάζει στον στόχο"}.
 
-Εκτίμηση ημερήσιων αναγκών:
-- Θερμίδες: περίπου {targets['calories']} kcal/ημέρα
-- Πρωτεΐνη: περίπου {targets['protein_g']} γρ/ημέρα
-- Υδατάνθρακες: περίπου {targets['carbs_g']} γρ/ημέρα
-- Λίπος: περίπου {targets['fat_g']} γρ/ημέρα
-"""
-                        plan_prompt = f"""
-You are an experienced nutrition coach.
+                        Θέλω ένα ΕΒΔΟΜΑΔΙΑΙΟ πρόγραμμα διατροφής σε μορφή πίνακα Markdown
+                        με **στήλες = ημέρες** και **γραμμές = τύποι γευμάτων**.
 
-{user_desc}
+                        Στήλες (με αυτή τη σειρά):
+                        - Γεύμα
+                        - Δευτέρα
+                        - Τρίτη
+                        - Τετάρτη
+                        - Πέμπτη
+                        - Παρασκευή
+                        - Σάββατο
+                        - Κυριακή
 
-Φτιάξε ένα εβδομαδιαίο πρόγραμμα διατροφής σε μορφή πίνακα Markdown.
+                        Γραμμές (με αυτή τη σειρά):
+                        - Πρωινό
+                        - Δεκατιανό
+                        - Μεσημεριανό
+                        - Απογευματινό
+                        - Βραδινό
+                        - Πριν τον ύπνο
 
-Προδιαγραφές πίνακα:
-- Η πρώτη γραμμή (κεφαλίδα) να είναι ΑΚΡΙΒΩΣ:
-  {header}
-- Η πρώτη στήλη να είναι τα γεύματα στη σειρά:
-  {row_names}.
-- Κάθε κελί να περιγράφει σύντομα το γεύμα της ημέρας με απλά ελληνικά φαγητά
-  και ενδεικτικές ποσότητες (π.χ. 150 γρ. κοτόπουλο, 1 φέτα ψωμί ολικής κτλ.).
-- Το πρόγραμμα να ταιριάζει με τον στόχο του χρήστη και τα macros.
+                        Σε κάθε κελί γράψε:
+                        • σύντομη περιγραφή του γεύματος  
+                        • + ενδεικτική ποσότητα (π.χ. "κοτόπουλο με ρύζι (150 g κοτόπουλο, 100 g ρύζι)")
 
-Σημαντικό:
-- Επέστρεψε ΜΟΝΟ τον πίνακα σε μορφή Markdown.
-- Μην γράψεις επιπλέον κείμενο.
-"""
-                    else:
-                        allergies_text = allergies or "none specified"
-                        prefs_text = prefs or "no specific favourite foods given"
-                        header = "| Meal / Day | " + " | ".join(DAY_LABELS["en"]) + " |"
-                        row_names = ", ".join(MEAL_LABELS["en"])
-                        user_desc = f"""
-User details:
-- Age: {age}
-- Sex: {sex}
-- Height: {height} cm
-- Weight: {weight} kg
-- Activity: {activity}
-- Goal: {goal}
-- Allergies / foods to avoid: {allergies_text}
-- Favourite foods: {prefs_text}
+                        Πολύ σημαντικό:
+                        - Επιστρέφεις ΜΟΝΟ τον πίνακα σε Markdown.
+                        - Καμία εξήγηση πριν ή μετά.
+                        """
 
-Estimated daily targets:
-- Calories: ~{targets['calories']} kcal/day
-- Protein: ~{targets['protein_g']} g/day
-- Carbs: ~{targets['carbs_g']} g/day
-- Fat: ~{targets['fat_g']} g/day
-"""
-                        plan_prompt = f"""
-You are an experienced nutrition coach.
+                        else:
+                            plan_prompt = f"""
+                        I am {age} years old, {sex_en}, {height} cm tall and {weight} kg.
+                        Activity level: {activity}.
+                        Goal: {goal}.
 
-{user_desc}
+                        Allergies / foods to avoid: {allergies or "none"}.
+                        Favourite foods: {prefs or "anything that fits the goal"}.
 
-Create a weekly meal plan as a Markdown table.
+                        Create a WEEKLY meal plan as a Markdown table
+                        with **columns = days** and **rows = meal types**.
 
-Table specs:
-- Header row MUST be exactly:
-  {header}
-- First column must be the meals in this order:
-  {row_names}.
-- Each cell should briefly describe that day's meal with simple foods
-  and approximate quantities (e.g. 150 g chicken, 1 slice wholegrain bread, etc.).
-- The plan should roughly match the user's goal and macros.
+                        Columns (in this exact order):
+                        - Meal
+                        - Monday
+                        - Tuesday
+                        - Wednesday
+                        - Thursday
+                        - Friday
+                        - Saturday
+                        - Sunday
 
-Important:
-- Return ONLY the table in Markdown format.
-- Do NOT add any explanation or extra text.
-"""
+                        Rows (in this exact order):
+                        - Breakfast
+                        - Mid-morning snack
+                        - Lunch
+                        - Afternoon snack
+                        - Dinner
+                        - Before bed
 
-                    response = client.chat.completions.create(
-                        model="gpt-4o-mini",
-                        temperature=0,
-                        messages=[
-                            {
-                                "role": "system",
-                                "content": "You are a helpful, precise nutrition assistant.",
-                            },
-                            {"role": "user", "content": plan_prompt},
-                        ],
-                    )
+                        In each cell include:
+                        • a short description of the meal  
+                        • + approximate quantity (e.g. "chicken with rice (150 g chicken, 100 g rice)")
+
+                        Very important:
+                        - Return ONLY the table in Markdown.
+                        - No explanation before or after.
+
+                        """
+
+                        response = client.chat.completions.create(
+                            model="gpt-4o-mini",
+                            temperature=0,
+                            messages=[
+                                {
+                                    "role": "system",
+                                    "content": "You are a helpful, precise nutrition assistant.",
+                                },
+                                {"role": "user", "content": plan_prompt},
+                            ],
+                        )
                     st.session_state["plan"] = response.choices[0].message.content
                     st.session_state["show_form"] = False
                     st.session_state["qa_history"] = []
                     st.session_state["qa_input"] = ""
                     st.rerun()
+                except Exception as e:
+                    msg = (
+                        "Κάτι πήγε στραβά με το AI. Δοκίμασε ξανά σε λίγο."
+                        if st.session_state["lang"] == "el"
+                        else "Something went wrong with the AI. Please try again later."
+                    )
+                    st.error(msg)
+
 
     else:
         # BACK BUTTON for new plan
@@ -1801,83 +1816,184 @@ Important:
                     # μετά την πρώτη αποθήκευση δεν θεωρείται πια "νέος"
                     st.session_state["new_user"] = False
 
-        st.write("---")
+                st.write("---")
 
-        # Q&A SECTION
-        st.subheader(tr("qa_title"))
+                # Q&A SECTION
+                st.subheader(tr("qa_title"))
 
-        if st.session_state["qa_history"]:
-            for msg in st.session_state["qa_history"][-6:]:
-                who = (
-                    "Εσύ"
-                    if (msg["role"] == "user" and lang == "el")
-                    else ("You" if msg["role"] == "user" else "AI")
-                )
-                st.markdown(f"**{who}:** {msg['content']}")
+                if st.session_state["qa_history"]:
+                    for msg in st.session_state["qa_history"][-6:]:
+                        who = (
+                            "Εσύ"
+                            if (msg["role"] == "user" and lang == "el")
+                            else ("You" if msg["role"] == "user" else "AI")
+                        )
+                        st.markdown(f"**{who}:** {msg['content']}")
 
-        with st.form("qa_form"):
-            st.session_state["qa_input"] = st.text_input(
-                tr("qa_your_q"),
-                value=st.session_state["qa_input"],
-            )
-            send_q = st.form_submit_button(tr("qa_button"))
+                # φόρμα μόνο για input + submit
+                with st.form("qa_form"):
+                    st.session_state["qa_input"] = st.text_input(
+                        tr("qa_your_q"),
+                        value=st.session_state["qa_input"],
+                    )
+                    send_q = st.form_submit_button(tr("qa_button"))
 
-        if send_q and st.session_state["qa_input"].strip():
-            question = st.session_state["qa_input"].strip()
-            st.session_state["qa_history"].append({"role": "user", "content": question})
+                # λογική Q&A ΕΞΩ από τη φόρμα
+                if send_q and st.session_state["qa_input"].strip():
+                    if not client:
+                        st.error(
+                            "Δεν υπάρχει διαθέσιμο AI αυτή τη στιγμή."
+                            if lang == "el"
+                            else "AI is not available right now."
+                        )
+                    else:
+                        question = st.session_state["qa_input"].strip()
+                        st.session_state["qa_history"].append(
+                            {"role": "user", "content": question}
+                        )
 
-            plan_text = st.session_state["plan"]
+                        plan_text = st.session_state["plan"]
 
-            if lang == "el":
-                qa_prompt = f"""
-Είσαι έμπειρος διατροφολόγος.
+                        if lang == "el":
+                            qa_prompt = f"""
+                Αυτό είναι το εβδομαδιαίο πρόγραμμα διατροφής του χρήστη σε πίνακα Markdown:
+                
+                {plan_text}
+                
+                Ο χρήστης ρωτάει:
+                {question}
+                
+                Απάντησε στα ελληνικά, με πρακτικές και συγκεκριμένες συμβουλές.
+                Μπορείς να αναφέρεσαι στο πλάνο, αλλά ΜΗΝ ξαναγράφεις όλο τον πίνακα.
+                """
+                        else:
+                            qa_prompt = f"""
+                Here is the user's weekly nutrition plan as a Markdown table:
+                
+                {plan_text}
+                
+                The user asks:
+                {question}
+                
+                Answer in clear, practical English.
+                You may refer to parts of the plan but do NOT rewrite the whole table.
+                """
 
-Ο χρήστης έχει το παρακάτω εβδομαδιαίο πρόγραμμα διατροφής (πίνακας Markdown):
+                        try:
+                            with st.spinner(
+                                    "Το AI σκέφτεται..." if lang == "el" else "AI is thinking..."
+                            ):
+                                qa_resp = client.chat.completions.create(
+                                    model="gpt-4o-mini",
+                                    temperature=0.4,
+                                    messages=[
+                                        {
+                                            "role": "system",
+                                            "content": "You are a helpful, practical nutrition coach.",
+                                        },
+                                        {"role": "user", "content": qa_prompt},
+                                    ],
+                                )
 
-{plan_text}
+                            answer = qa_resp.choices[0].message.content
+                            st.session_state["qa_history"].append(
+                                {"role": "assistant", "content": answer}
+                            )
+                            st.session_state["qa_input"] = ""
+                            st.rerun()
 
-Ο χρήστης ρωτάει:
-{question}
+                        except Exception:
+                            err_msg = (
+                                "Κάτι πήγε στραβά με την απάντηση του AI. Προσπάθησε ξανά αργότερα."
+                                if lang == "el"
+                                else "Something went wrong while getting the AI answer. Please try again later."
+                            )
+                            st.error(err_msg)
 
-Απάντησε στα ελληνικά, σύντομα, φιλικά και πρακτικά.
-Μην ξαναγράψεις όλο το πρόγραμμα, απάντησε μόνο στην ερώτηση.
-"""
-            else:
-                qa_prompt = f"""
-You are an experienced nutrition coach.
+                st.write("---")
 
-The user has the following weekly diet plan (Markdown table):
+                # CHANGES SECTION
+                st.subheader(tr("changes_title"))
+                st.write(tr("changes_desc"))
 
-{plan_text}
+                with st.form("changes_form"):
+                    feedback = st.text_area(
+                        "Τι θα ήθελες να αλλάξει στο πρόγραμμα;"
+                        if lang == "el"
+                        else "What would you like to change in the plan?",
+                        placeholder=tr("changes_ph"),
+                    )
+                    apply_changes = st.form_submit_button(tr("changes_button"))
 
-The user asks:
-{question}
+                if apply_changes:
+                    if not feedback.strip():
+                        st.warning(tr("need_feedback"))
+                    elif not client:
+                        st.error(
+                            "Το AI δεν είναι διαθέσιμο αυτή τη στιγμή."
+                            if lang == "el"
+                            else "AI is not available right now."
+                        )
+                    else:
+                        if lang == "el":
+                            adjust_prompt = f"""
+                Εδώ είναι το τωρινό εβδομαδιαίο πρόγραμμα διατροφής σε πίνακα Markdown:
+                
+                {st.session_state["plan"]}
+                
+                Ο χρήστης έγραψε τα εξής σχόλια / αλλαγές που θέλει:
+                {feedback}
+                
+                Φτιάξε ΝΕΟ πρόγραμμα, με την ίδια ακριβώς μορφή πίνακα (ίδιες στήλες, ίδιες ημέρες, ίδια γεύματα),
+                αλλά προσαρμοσμένο στις επιθυμίες του χρήστη.
+                
+                Πολύ σημαντικό:
+                - Γράψε μόνο τον πίνακα σε μορφή Markdown.
+                - Μην προσθέσεις επιπλέον κείμενο.
+                """
+                        else:
+                            adjust_prompt = f"""
+                Here is the current weekly diet plan as a Markdown table:
+                
+                {st.session_state["plan"]}
+                
+                The user wants the following changes:
+                {feedback}
+                
+                Create a NEW plan, with the exact same table structure (same days, same meal rows),
+                but adjusted to the user's comments.
+                
+                Important:
+                - Return ONLY the table in Markdown format.
+                - Do NOT add any extra text.
+                """
 
-Answer in English, short, friendly and practical.
-Do NOT rewrite the entire plan, just answer the question.
-"""
+                        try:
+                            with st.spinner(
+                                    "Προσαρμόζω το πρόγραμμα..." if lang == "el" else "Adjusting the plan..."
+                            ):
+                                new_resp = client.chat.completions.create(
+                                    model="gpt-4o-mini",
+                                    temperature=0,
+                                    messages=[
+                                        {
+                                            "role": "system",
+                                            "content": "You are a helpful nutrition assistant.",
+                                        },
+                                        {"role": "user", "content": adjust_prompt},
+                                    ],
+                                )
+                            st.session_state["plan"] = new_resp.choices[0].message.content
+                            st.rerun()
+                        except Exception:
+                            err_msg = (
+                                "Κάτι πήγε στραβά με την προσαρμογή του πλάνου. Προσπάθησε ξανά."
+                                if lang == "el"
+                                else "Something went wrong while adjusting the plan. Please try again."
+                            )
+                            st.error(err_msg)
 
-            with st.spinner("Το AI σκέφτεται..." if lang == "el" else "AI is thinking..."):
-                qa_resp = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    temperature=0.4,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are a helpful, practical nutrition coach.",
-                        },
-                        {"role": "user", "content": qa_prompt},
-                    ],
-                )
-            answer = qa_resp.choices[0].message.content
-            st.session_state["qa_history"].append(
-                {"role": "assistant", "content": answer}
-            )
-
-            st.session_state["qa_input"] = ""
-            st.rerun()
-
-        st.write("---")
+                st.write("---")
 
         # CHANGES SECTION
         st.subheader(tr("changes_title"))
@@ -1895,56 +2011,71 @@ Do NOT rewrite the entire plan, just answer the question.
         if apply_changes:
             if not feedback.strip():
                 st.warning(tr("need_feedback"))
+            elif not client:
+                st.error(
+                    "Το AI δεν είναι διαθέσιμο αυτή τη στιγμή."
+                    if lang == "el"
+                    else "AI is not available right now."
+                )
             else:
                 if lang == "el":
                     adjust_prompt = f"""
-Εδώ είναι το τωρινό εβδομαδιαίο πρόγραμμα διατροφής σε πίνακα Markdown:
+        Εδώ είναι το τωρινό εβδομαδιαίο πρόγραμμα διατροφής σε πίνακα Markdown:
 
-{st.session_state["plan"]}
+        {st.session_state["plan"]}
 
-Ο χρήστης έγραψε τα εξής σχόλια / αλλαγές που θέλει:
-{feedback}
+        Ο χρήστης έγραψε τα εξής σχόλια / αλλαγές που θέλει:
+        {feedback}
 
-Φτιάξε ΝΕΟ πρόγραμμα, με την ίδια ακριβώς μορφή πίνακα (ίδιες στήλες, ίδιες ημέρες, ίδια γεύματα),
-αλλά προσαρμοσμένο στις επιθυμίες του χρήστη.
+        Φτιάξε ΝΕΟ πρόγραμμα, με την ίδια ακριβώς μορφή πίνακα (ίδιες στήλες, ίδιες ημέρες, ίδια γεύματα),
+        αλλά προσαρμοσμένο στις επιθυμίες του χρήστη.
 
-Πολύ σημαντικό:
-- Γράψε μόνο τον πίνακα σε μορφή Markdown.
-- Μην προσθέσεις επιπλέον κείμενο.
-"""
+        Πολύ σημαντικό:
+        - Γράψε μόνο τον πίνακα σε μορφή Markdown.
+        - Μην προσθέσεις επιπλέον κείμενο.
+        """
                 else:
                     adjust_prompt = f"""
-Here is the current weekly diet plan as a Markdown table:
+        Here is the current weekly diet plan as a Markdown table:
 
-{st.session_state["plan"]}
+        {st.session_state["plan"]}
 
-The user wants the following changes:
-{feedback}
+        The user wants the following changes:
+        {feedback}
 
-Create a NEW plan, with the exact same table structure (same days, same meal rows),
-but adjusted to the user's comments.
+        Create a NEW plan, with the exact same table structure (same days, same meal rows),
+        but adjusted to the user's comments.
 
-Important:
-- Return ONLY the table in Markdown format.
-- Do NOT add any extra text.
-"""
+        Important:
+        - Return ONLY the table in Markdown format.
+        - Do NOT add any extra text.
+        """
 
-                with st.spinner(
-                    "Προσαρμόζω το πρόγραμμα..." if lang == "el" else "Adjusting the plan..."
-                ):
-                    new_resp = client.chat.completions.create(
-                        model="gpt-4o-mini",
-                        temperature=0,
-                        messages=[
-                            {
-                                "role": "system",
-                                "content": "You are a helpful nutrition assistant.",
-                            },
-                            {"role": "user", "content": adjust_prompt},
-                        ],
+                try:
+                    with st.spinner(
+                            "Προσαρμόζω το πρόγραμμα..." if lang == "el" else "Adjusting the plan..."
+                    ):
+                        new_resp = client.chat.completions.create(
+                            model="gpt-4o-mini",
+                            temperature=0,
+                            messages=[
+                                {
+                                    "role": "system",
+                                    "content": "You are a helpful nutrition assistant.",
+                                },
+                                {"role": "user", "content": adjust_prompt},
+                            ],
+                        )
+                    st.session_state["plan"] = new_resp.choices[0].message.content
+                    st.rerun()
+                except Exception:
+                    err_msg = (
+                        "Κάτι πήγε στραβά με την προσαρμογή του πλάνου. Προσπάθησε ξανά."
+                        if lang == "el"
+                        else "Something went wrong while adjusting the plan. Please try again."
                     )
-                st.session_state["plan"] = new_resp.choices[0].message.content
-                st.rerun()
+                    st.error(err_msg)
+
 
 # PROGRESS PAGE (ιστορικό + γρήγορο log + παλιά πλάνα)
 elif page == "progress":
