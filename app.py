@@ -115,6 +115,344 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# --- Street-style diet table (red borders, bold vibe) ---
+st.markdown(
+    """
+    <style>
+    /* MAIN TABLE CARD */
+    table.diet-table {
+        border-collapse: collapse;
+        width: 100%;
+        background: #0b1120; /* dark navy */
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow:
+            0 0 0 2px #ef4444,              /* red outer outline */
+            0 18px 45px rgba(0, 0, 0, 0.8);  /* heavy drop shadow */
+        font-family: system-ui, -apple-system, BlinkMacSystemFont,
+                     "Segoe UI", "Montserrat", sans-serif;
+        font-size: 0.9rem;
+    }
+
+    /* HEADER (DAYS) */
+    table.diet-table thead th {
+        background: linear-gradient(135deg, #111827, #1d4ed8); /* dark -> blue */
+        color: #f9fafb;
+        padding: 0.7rem 0.75rem;
+        text-align: center;
+        border-bottom: 2px solid #ef4444;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        border-right: 1px solid rgba(15, 23, 42, 0.9);
+        white-space: nowrap;
+    }
+    table.diet-table thead th:last-child {
+        border-right: none;
+    }
+
+    /* BODY CELLS GENERAL */
+    table.diet-table tbody td {
+        padding: 0.65rem 0.75rem;
+        color: #e5e7eb;
+        background: #020617;
+        border-top: 1px solid rgba(15, 23, 42, 0.95);
+        border-right: 1px solid rgba(15, 23, 42, 0.95);
+        vertical-align: top;
+    }
+    table.diet-table tbody td:last-child {
+        border-right: none;
+    }
+
+    /* FIRST COLUMN (MEAL TYPES) – red strip */
+    table.diet-table tbody td:first-child {
+        background: #7f1d1d;         /* deep red */
+        color: #fef2f2;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        text-align: left;
+        white-space: nowrap;
+        border-right: 2px solid #f97316; /* warm accent border */
+    }
+
+    /* ZEBRA STRIPES ONLY ON MAIN BODY (not first column) */
+    table.diet-table tbody tr:nth-child(even) td:not(:first-child) {
+        background: #020617;  /* keep dark */
+    }
+    table.diet-table tbody tr:nth-child(odd) td:not(:first-child) {
+        background: #020617;
+    }
+
+    /* INNER BODY CELL “TILE” LOOK */
+    table.diet-table tbody td:not(:first-child) {
+        background-image: linear-gradient(
+            135deg,
+            rgba(148, 163, 184, 0.12) 0,
+            transparent 60%
+        );
+        border-radius: 8px;
+    }
+
+    /* ROW HOVER – subtle blue glow */
+    table.diet-table tbody tr:hover td:not(:first-child) {
+        background-color: #020617;
+        box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.7);
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Anton&display=swap');
+
+    /* MAIN DAY CARD (single-day view) */
+    .day-card {
+        width: 580px !important;
+        margin: 18px auto 32px auto;
+        border-radius: 18px;
+        border: 3px solid #ff2d2d;
+        background: rgba(10, 10, 20, 0.96);
+        box-shadow: 0 0 25px rgba(255, 0, 0, 0.22);
+    }
+
+    .day-card-inner {
+        padding: 26px 26px 20px 26px;  /* extra top padding για να μην ακουμπά το WEEKLY PLAN */
+    }
+
+    /* flip animation – εφαρμόζεται στα id day-card-0..6 */
+    #day-card-0,
+    #day-card-1,
+    #day-card-2,
+    #day-card-3,
+    #day-card-4,
+    #day-card-5,
+    #day-card-6 {
+        animation: flipInDay 0.45s ease;
+        transform-origin: center;
+    }
+
+    @keyframes flipInDay {
+        0% {
+            transform: rotateY(90deg);
+            opacity: 0;
+        }
+        60% {
+            transform: rotateY(-6deg);
+            opacity: 1;
+        }
+        100% {
+            transform: rotateY(0deg);
+            opacity: 1;
+        }
+    }
+
+    .day-card-subtitle {
+        font-size: 11px;
+        color: #00aaff;
+        opacity: 0.75;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+
+    .day-card-title {
+        font-family: 'Anton', system-ui, sans-serif !important;
+        font-size: 28px;
+        color: #ffffff;
+        letter-spacing: 1px;
+        margin: 0 0 20px 0;
+        text-shadow: 0 0 8px rgba(0,0,0,0.5);
+    }
+
+    /* MEAL CARD */
+    .meal-card {
+        background: rgba(255,255,255,0.06);
+        border: 2px solid #004c99;
+        border-radius: 12px;
+        padding: 14px 16px;
+        margin-bottom: 12px;
+    }
+
+    .meal-title {
+        font-family: 'Anton', system-ui, sans-serif !important;
+        color: #ff2d2d;
+        font-size: 16px;
+        margin-bottom: 5px;
+    }
+
+    .meal-content {
+        color: #ffffff;
+        font-size: 14px;
+        line-height: 1.4;
+    }
+
+    /* COMPACT CARDS (full-week view) */
+    .day-card-compact {
+        width: 100% !important;
+        max-width: none;       /* γεμίζει όλη τη στήλη */
+        margin: 4px 0 8px 0;   /* ελάχιστο κενό πάνω-κάτω, καθόλου δεξιά-αριστερά */
+    }
+
+    .day-card-compact .day-card-title {
+        font-size: 22px;
+        margin-bottom: 12px;
+    }
+
+    .day-card-compact .meal-card {
+        padding: 8px 10px;
+        margin-bottom: 8px;
+    }
+
+    .day-card-compact .meal-content {
+        font-size: 13px;
+    }
+
+    /* NEON ARROWS */
+    .day-nav-arrow {
+        text-align: center;
+    }
+
+    .day-nav-arrow .stButton > button {
+        background: #020617;
+        border-radius: 999px;
+        border: 2px solid #3b82f6;
+        color: #e5e7eb;
+        width: 44px;
+        height: 44px;
+        font-size: 22px;
+        line-height: 1;
+        padding: 0;
+        box-shadow: 0 0 12px rgba(59, 130, 246, 0.6);
+        transition: all 0.18s ease-out;
+    }
+
+    .day-nav-arrow .stButton > button:hover {
+        border-color: #ef4444;
+        box-shadow: 0 0 18px rgba(239, 68, 68, 0.85);
+        transform: translateY(-1px) scale(1.03);
+    }
+
+    /* DAY PILLS (MTWTFSS / ΔΤΤΠΠΣΚ) */
+    .day-pill-row {
+        display: flex;
+        justify-content: center;
+        gap: 6px;
+        margin: 6px 0 14px 0;
+    }
+
+    .day-pill {
+        width: 26px;
+        height: 26px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        text-transform: uppercase;
+        color: rgba(229, 231, 235, 0.8);
+        background: rgba(15, 23, 42, 0.9);
+    }
+
+    .day-pill.active {
+        border-color: #ef4444;
+        background: linear-gradient(135deg, #ef4444, #3b82f6);
+        color: #ffffff;
+        box-shadow: 0 0 12px rgba(0, 0, 0, 0.7);
+    }
+
+        /* TOGGLE – μικρό “chip” style στο κέντρο */
+    .day-toggle-outer {
+        display: flex;
+        justify-content: center;
+        margin: 12px 0 4px 0;
+    }
+
+    .day-toggle-wrapper {
+        display: inline-flex;
+        background: rgba(15, 23, 42, 0.95);
+        padding: 3px;
+        border-radius: 999px;
+        box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.6);
+        gap: 4px;
+    }
+
+    .day-toggle-wrapper .stButton {
+        margin: 0;
+        padding: 0;
+    }
+
+    .day-toggle-wrapper .toggle-btn .stButton > button,
+    .day-toggle-wrapper .toggle-btn-active .stButton > button {
+        border-radius: 999px;
+        border: none;
+        font-size: 12px;
+        padding: 4px 14px;
+        height: 28px;
+        min-width: 135px;
+    }
+
+    .day-toggle-wrapper .toggle-btn .stButton > button {
+        background: transparent;
+        color: rgba(229, 231, 235, 0.8);
+    }
+
+    .day-toggle-wrapper .toggle-btn-active .stButton > button {
+        background: linear-gradient(135deg, #ef4444, #3b82f6);
+        color: #ffffff;
+        box-shadow: 0 0 12px rgba(15, 23, 42, 0.9);
+    }
+    .week-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 35px;
+    margin-top: 30px;
+    width: 100%;
+    }
+    
+    .week-card {
+        max-width: 420px;
+        margin: 0 auto;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    """
+    <style>
+    /* Grid για την προβολή "Όλη η εβδομάδα" */
+    .week-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+        gap: 24px;
+        margin-top: 20px;
+        width: 100%;
+    }
+
+    /* Wrapper κάθε κάρτας μέσα στο grid */
+    .week-card {
+        max-width: 420px;
+        margin: 0 auto;
+    }
+
+    /* Στενή κάρτα για την προβολή εβδομάδας */
+    .day-card-compact {
+        width: 100% !important;
+        max-width: 420px;
+        margin: 0 auto 24px auto;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 
 st.markdown(
     """
@@ -186,6 +524,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 # ----------------- LANGUAGE TEXTS -----------------
@@ -1711,30 +2050,156 @@ elif page == "new_plan":
         lang = st.session_state["lang"]
 
         if df_plan is not None:
-            visual_df = df_plan.copy()
+            # ---- 1) Φτιάχνουμε dict: day -> [meals] ----
+            meal_col = df_plan.columns[0]
+            day_cols = df_plan.columns[1:]  # Δευτέρα, Τρίτη, ...
 
-            def multiline_cell(val):
-                if isinstance(val, str):
-                    return val.replace(", ", "<br>")
-                return val
+            day_dict = {day: [] for day in day_cols}
 
-            visual_df = visual_df.applymap(multiline_cell)
-            html_table = visual_df.to_html(index=False, escape=False)
+            for _, row in df_plan.iterrows():
+                meal_name = str(row[meal_col]).strip()
+                if not meal_name:
+                    continue
 
-            subtitle = (
-                "Εβδομαδιαίο πρόγραμμα (οπτική μορφή)"
-                if lang == "el"
-                else "Weekly plan (visual view)"
+                for day in day_cols:
+                    content = str(row[day]).strip()
+                    if content and content != "-":
+                        day_dict[day].append(
+                            {"meal": meal_name, "content": content}
+                        )
+
+            # ---- 2) ORDERED DAYS & SHORT LABELS ----
+            if lang == "el":
+                ordered_days = [
+                    "Δευτέρα", "Τρίτη", "Τετάρτη",
+                    "Πέμπτη", "Παρασκευή", "Σάββατο", "Κυριακή"
+                ]
+                day_short = ["Δ", "Τ", "Τ", "Π", "Π", "Σ", "Κ"]
+            else:
+                ordered_days = [
+                    "Monday", "Tuesday", "Wednesday",
+                    "Thursday", "Friday", "Saturday", "Sunday"
+                ]
+                day_short = ["M", "T", "W", "T", "F", "S", "S"]
+
+            # ---- 3) Επιλογή τρόπου προβολής (απλό radio) ----
+            if lang == "el":
+                opt_day = "Μια μέρα κάθε φορά"
+                opt_week = "Όλη η εβδομάδα"
+            else:
+                opt_day = "One day at a time"
+                opt_week = "Full week"
+
+            # radio οριζόντιο, χωρίς label
+            choice = st.radio(
+                label="",
+                options=[opt_day, opt_week],
+                horizontal=True,
+                label_visibility="collapsed",
             )
-            st.markdown(f"##### {subtitle}")
-            st.markdown(
-                f"<div style='overflow-x:auto;'>{html_table}</div>",
-                unsafe_allow_html=True,
-            )
+
+            # Εσωτερική λογική: 'day' ή 'week'
+            view_mode = "day" if choice == opt_day else "week"
+
+            # ===================== MODE 1: ΜΙΑ ΜΕΡΑ ΚΑΘΕ ΦΟΡΑ =====================
+            if view_mode == "day":
+                # ---- 4) SETUP CAROUSEL INDEX ----
+                if "day_index" not in st.session_state:
+                    st.session_state["day_index"] = 0
+
+                st.session_state["day_index"] %= len(ordered_days)
+                current_index = st.session_state["day_index"]
+                current_day = ordered_days[current_index]
+                meals = day_dict.get(current_day, [])
+
+                # ---- 5) Navigation arrows + title ----
+                nav_prev, nav_title, nav_next = st.columns([1, 4, 1])
+
+                with nav_prev:
+                    st.markdown("<div class='day-nav-arrow'>", unsafe_allow_html=True)
+                    if st.button("❮", key="day_prev"):
+                        st.session_state["day_index"] = (current_index - 1) % len(ordered_days)
+                        st.rerun()
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+                with nav_title:
+                    st.markdown(
+                        f"<h3 style='text-align:center; margin-bottom:0;'>{current_day}</h3>",
+                        unsafe_allow_html=True,
+                    )
+
+                with nav_next:
+                    st.markdown("<div class='day-nav-arrow'>", unsafe_allow_html=True)
+                    if st.button("❯", key="day_next"):
+                        st.session_state["day_index"] = (current_index + 1) % len(ordered_days)
+                        st.rerun()
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+                # ---- 6) Day pills row (MTWTFSS / ΔΤΤΠΠΣΚ) ----
+                pill_html = "<div class='day-pill-row'>"
+                for idx, label in enumerate(day_short):
+                    active = " active" if idx == current_index else ""
+                    pill_html += f"<span class='day-pill{active}'>{label}</span>"
+                pill_html += "</div>"
+                st.markdown(pill_html, unsafe_allow_html=True)
+
+                # ---- 7) SHOW SINGLE DAY CARD ----
+                card_html = (
+                    f"<div class='day-card' id='day-card-{current_index}'>"
+                    "<div class='day-card-inner'>"
+                )
+                card_html += "<div class='day-card-subtitle'>WEEKLY PLAN</div>"
+                card_html += (
+                    f"<h3 class='day-card-title' "
+                    f"style=\"font-family:'Anton', system-ui, sans-serif;\">"
+                    f"{current_day}</h3>"
+                )
+
+                for m in meals:
+                    card_html += (
+                        "<div class='meal-card'>"
+                        f"<div class='meal-title'>{m['meal']}</div>"
+                        f"<div class='meal-content'>{m['content']}</div>"
+                        "</div>"
+                    )
+
+                card_html += "</div></div>"
+                st.markdown(card_html, unsafe_allow_html=True)
+
+                # ===================== MODE 2: ΟΛΗ Η ΕΒΔΟΜΑΔΑ =====================
+            else:
+                st.write("")  # μικρό κενό
+
+                # GRID layout για όλες τις μέρες
+                st.markdown("<div class='week-grid'>", unsafe_allow_html=True)
+
+                for day in ordered_days:
+                    meals = day_dict.get(day, [])
+
+                    card_html = (
+                        "<div class='week-card'>"
+                        "<div class='day-card day-card-compact'>"
+                        "<div class='day-card-inner'>"
+                    )
+                    card_html += "<div class='day-card-subtitle'>WEEKLY PLAN</div>"
+                    card_html += f"<h3 class='day-card-title'>{day}</h3>"
+
+                    for m in meals:
+                        card_html += (
+                            "<div class='meal-card'>"
+                            f"<div class='meal-title'>{m['meal']}</div>"
+                            f"<div class='meal-content'>{m['content']}</div>"
+                            "</div>"
+                        )
+
+                    card_html += "</div></div></div>"
+
+                    st.markdown(card_html, unsafe_allow_html=True)
+
+                st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.warning("Δεν μπόρεσα να μετατρέψω το πρόγραμμα σε πίνακα.")
 
-        st.subheader(tr("macros_title"))
         if lang == "el":
             st.markdown(
                 f"""
@@ -2194,7 +2659,12 @@ elif page == "progress":
                             return val
 
                         vis_old = vis_old.applymap(multiline_old)
-                        html_old = vis_old.to_html(index=False, escape=False)
+                        html_old = vis_old.to_html(
+                            index=False,
+                            escape=False,
+                            classes="diet-table",  # ίδια κλάση
+                            border=0,
+                        )
                         st.markdown(
                             f"<div style='overflow-x:auto;'>{html_old}</div>",
                             unsafe_allow_html=True,
