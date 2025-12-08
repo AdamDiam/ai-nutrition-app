@@ -8,7 +8,6 @@ import os
 import io
 from pathlib import Path
 from datetime import datetime, date
-
 import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
@@ -17,40 +16,37 @@ import base64
 import json
 import bcrypt
 import shutil
+from config import TEXT, DAY_LABELS, tr_raw, DATA_DIR, HISTORY_FILE, PROFILE_FILE, USERS_FILE
+from storage import save_history_for_today, load_profile, save_profile, load_user_history
+from ai_layer import (
+    client,
+    calculate_targets,
+    markdown_table_to_df,
+    generate_weekly_plan,
+    answer_plan_question,
+    adjust_weekly_plan,
+)
+from auth_utils import (
+    load_users,
+    save_users,
+    hash_password,
+    check_password,
+    update_last_login,
+)
+
+def load_local_css(path: str):
+    try:
+        with open(path) as f:
+            css = f.read()
+        st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+    except FileNotFoundError:
+        st.warning(f"CSS file not found: {path}")
 
 if "signup_step" not in st.session_state:
     st.session_state.signup_step = 1
 
-USERS_FILE = "users.json"
-
 def get_security_question() -> str:
     return tr("security_question")
-
-def load_users():
-    try:
-        with open(USERS_FILE, "r") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
-
-def save_users(users: dict):
-    with open(USERS_FILE, "w") as f:
-        json.dump(users, f, indent=4)
-
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode("utf-8")
-
-def check_password(password: str, hashed: str) -> bool:
-    try:
-        return bcrypt.checkpw(password.encode(), hashed.encode())
-    except Exception:
-        return False
-
-def update_last_login(username: str):
-    users = load_users()
-    if username in users:
-        users[username]["last_login"] = datetime.utcnow().isoformat()
-        save_users(users)
 
 def load_base64(path: str) -> str:
     """Γυρνάει base64 για εικόνες. Αν λείπει το αρχείο, δεν ρίχνει error."""
@@ -65,22 +61,13 @@ def load_base64(path: str) -> str:
 LOGO_BASE64 = load_base64("assets/logo.png")
 BG_BASE64   = load_base64("assets/bg_pattern.png")
 
-# ----------------- CONFIG & OPENAI -----------------
-load_dotenv()
-api_key = os.getenv("OPENAI_API_KEY")
-client = OpenAI(api_key=api_key) if api_key else None
-
-# Μικρό banner αν δεν υπάρχει API key
-if not api_key:
-    st.error(
-        "Δεν βρέθηκε OPENAI_API_KEY."
-    )
-
 st.set_page_config(
     page_title="02Hero Nutrition Helper",
     page_icon="🍽️",
     layout="wide",
 )
+
+load_local_css("assets/style.css")
 
 st.markdown(
     f"""
@@ -115,898 +102,13 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# --- Street-style diet table (red borders, bold vibe) ---
-st.markdown(
-    """
-    <style>
-    /* MAIN TABLE CARD */
-    table.diet-table {
-        border-collapse: collapse;
-        width: 100%;
-        background: #0b1120; /* dark navy */
-        border-radius: 18px;
-        overflow: hidden;
-        box-shadow:
-            0 0 0 2px #ef4444,              /* red outer outline */
-            0 18px 45px rgba(0, 0, 0, 0.8);  /* heavy drop shadow */
-        font-family: system-ui, -apple-system, BlinkMacSystemFont,
-                     "Segoe UI", "Montserrat", sans-serif;
-        font-size: 0.9rem;
-    }
-
-    /* HEADER (DAYS) */
-    table.diet-table thead th {
-        background: linear-gradient(135deg, #111827, #1d4ed8); /* dark -> blue */
-        color: #f9fafb;
-        padding: 0.7rem 0.75rem;
-        text-align: center;
-        border-bottom: 2px solid #ef4444;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        border-right: 1px solid rgba(15, 23, 42, 0.9);
-        white-space: nowrap;
-    }
-    table.diet-table thead th:last-child {
-        border-right: none;
-    }
-
-    /* BODY CELLS GENERAL */
-    table.diet-table tbody td {
-        padding: 0.65rem 0.75rem;
-        color: #e5e7eb;
-        background: #020617;
-        border-top: 1px solid rgba(15, 23, 42, 0.95);
-        border-right: 1px solid rgba(15, 23, 42, 0.95);
-        vertical-align: top;
-    }
-    table.diet-table tbody td:last-child {
-        border-right: none;
-    }
-
-    /* FIRST COLUMN (MEAL TYPES) – red strip */
-    table.diet-table tbody td:first-child {
-        background: #7f1d1d;         /* deep red */
-        color: #fef2f2;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        text-align: left;
-        white-space: nowrap;
-        border-right: 2px solid #f97316; /* warm accent border */
-    }
-
-    /* ZEBRA STRIPES ONLY ON MAIN BODY (not first column) */
-    table.diet-table tbody tr:nth-child(even) td:not(:first-child) {
-        background: #020617;  /* keep dark */
-    }
-    table.diet-table tbody tr:nth-child(odd) td:not(:first-child) {
-        background: #020617;
-    }
-
-    /* INNER BODY CELL “TILE” LOOK */
-    table.diet-table tbody td:not(:first-child) {
-        background-image: linear-gradient(
-            135deg,
-            rgba(148, 163, 184, 0.12) 0,
-            transparent 60%
-        );
-        border-radius: 8px;
-    }
-
-    /* ROW HOVER – subtle blue glow */
-    table.diet-table tbody tr:hover td:not(:first-child) {
-        background-color: #020617;
-        box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.7);
-    }
-
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    """
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Anton&display=swap');
-
-    /* MAIN DAY CARD (single-day view) */
-    .day-card {
-        width: 580px !important;
-        margin: 18px auto 32px auto;
-        border-radius: 18px;
-        border: 3px solid #ff2d2d;
-        background: rgba(10, 10, 20, 0.96);
-        box-shadow: 0 0 25px rgba(255, 0, 0, 0.22);
-    }
-
-    .day-card-inner {
-        padding: 26px 26px 20px 26px;  /* extra top padding για να μην ακουμπά το WEEKLY PLAN */
-    }
-
-    /* flip animation – εφαρμόζεται στα id day-card-0..6 */
-    #day-card-0,
-    #day-card-1,
-    #day-card-2,
-    #day-card-3,
-    #day-card-4,
-    #day-card-5,
-    #day-card-6 {
-        animation: flipInDay 0.45s ease;
-        transform-origin: center;
-    }
-
-    @keyframes flipInDay {
-        0% {
-            transform: rotateY(90deg);
-            opacity: 0;
-        }
-        60% {
-            transform: rotateY(-6deg);
-            opacity: 1;
-        }
-        100% {
-            transform: rotateY(0deg);
-            opacity: 1;
-        }
-    }
-
-    .day-card-subtitle {
-        font-size: 11px;
-        color: #00aaff;
-        opacity: 0.75;
-        margin-bottom: 6px;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-    }
-
-    .day-card-title {
-        font-family: 'Anton', system-ui, sans-serif !important;
-        font-size: 28px;
-        color: #ffffff;
-        letter-spacing: 1px;
-        margin: 0 0 20px 0;
-        text-shadow: 0 0 8px rgba(0,0,0,0.5);
-    }
-
-    /* MEAL CARD */
-    .meal-card {
-        background: rgba(255,255,255,0.06);
-        border: 2px solid #004c99;
-        border-radius: 12px;
-        padding: 14px 16px;
-        margin-bottom: 12px;
-    }
-
-    .meal-title {
-        font-family: 'Anton', system-ui, sans-serif !important;
-        color: #ff2d2d;
-        font-size: 16px;
-        margin-bottom: 5px;
-    }
-
-    .meal-content {
-        color: #ffffff;
-        font-size: 14px;
-        line-height: 1.4;
-    }
-
-    /* COMPACT CARDS (full-week view) */
-    .day-card-compact {
-        width: 100% !important;
-        max-width: none;       /* γεμίζει όλη τη στήλη */
-        margin: 4px 0 8px 0;   /* ελάχιστο κενό πάνω-κάτω, καθόλου δεξιά-αριστερά */
-    }
-
-    .day-card-compact .day-card-title {
-        font-size: 22px;
-        margin-bottom: 12px;
-    }
-
-    .day-card-compact .meal-card {
-        padding: 8px 10px;
-        margin-bottom: 8px;
-    }
-
-    .day-card-compact .meal-content {
-        font-size: 13px;
-    }
-
-    /* NEON ARROWS */
-    .day-nav-arrow {
-        text-align: center;
-    }
-
-    .day-nav-arrow .stButton > button {
-        background: #020617;
-        border-radius: 999px;
-        border: 2px solid #3b82f6;
-        color: #e5e7eb;
-        width: 44px;
-        height: 44px;
-        font-size: 22px;
-        line-height: 1;
-        padding: 0;
-        box-shadow: 0 0 12px rgba(59, 130, 246, 0.6);
-        transition: all 0.18s ease-out;
-    }
-
-    .day-nav-arrow .stButton > button:hover {
-        border-color: #ef4444;
-        box-shadow: 0 0 18px rgba(239, 68, 68, 0.85);
-        transform: translateY(-1px) scale(1.03);
-    }
-
-    /* DAY PILLS (MTWTFSS / ΔΤΤΠΠΣΚ) */
-    .day-pill-row {
-        display: flex;
-        justify-content: center;
-        gap: 6px;
-        margin: 6px 0 14px 0;
-    }
-
-    .day-pill {
-        width: 26px;
-        height: 26px;
-        border-radius: 999px;
-        border: 1px solid rgba(148, 163, 184, 0.7);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 11px;
-        text-transform: uppercase;
-        color: rgba(229, 231, 235, 0.8);
-        background: rgba(15, 23, 42, 0.9);
-    }
-
-    .day-pill.active {
-        border-color: #ef4444;
-        background: linear-gradient(135deg, #ef4444, #3b82f6);
-        color: #ffffff;
-        box-shadow: 0 0 12px rgba(0, 0, 0, 0.7);
-    }
-
-        /* TOGGLE – μικρό “chip” style στο κέντρο */
-    .day-toggle-outer {
-        display: flex;
-        justify-content: center;
-        margin: 12px 0 4px 0;
-    }
-
-    .day-toggle-wrapper {
-        display: inline-flex;
-        background: rgba(15, 23, 42, 0.95);
-        padding: 3px;
-        border-radius: 999px;
-        box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.6);
-        gap: 4px;
-    }
-
-    .day-toggle-wrapper .stButton {
-        margin: 0;
-        padding: 0;
-    }
-
-    .day-toggle-wrapper .toggle-btn .stButton > button,
-    .day-toggle-wrapper .toggle-btn-active .stButton > button {
-        border-radius: 999px;
-        border: none;
-        font-size: 12px;
-        padding: 4px 14px;
-        height: 28px;
-        min-width: 135px;
-    }
-
-    .day-toggle-wrapper .toggle-btn .stButton > button {
-        background: transparent;
-        color: rgba(229, 231, 235, 0.8);
-    }
-
-    .day-toggle-wrapper .toggle-btn-active .stButton > button {
-        background: linear-gradient(135deg, #ef4444, #3b82f6);
-        color: #ffffff;
-        box-shadow: 0 0 12px rgba(15, 23, 42, 0.9);
-    }
-    .week-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
-    gap: 35px;
-    margin-top: 30px;
-    width: 100%;
-    }
-    
-    .week-card {
-        max-width: 420px;
-        margin: 0 auto;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    """
-    <style>
-    /* Grid για την προβολή "Όλη η εβδομάδα" */
-    .week-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-        gap: 24px;
-        margin-top: 20px;
-        width: 100%;
-    }
-
-    /* Wrapper κάθε κάρτας μέσα στο grid */
-    .week-card {
-        max-width: 420px;
-        margin: 0 auto;
-    }
-
-    /* Στενή κάρτα για την προβολή εβδομάδας */
-    .day-card-compact {
-        width: 100% !important;
-        max-width: 420px;
-        margin: 0 auto 24px auto;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-st.markdown(
-    """
-    <style>
-    .signup-progress {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 1.5rem;
-        margin: 1.2rem 0 1.8rem 0;
-    }
-    .signup-progress .step {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        font-size: 0.85rem;
-        color: #e5e7eb;
-        opacity: 0.5;
-        transition: opacity 0.25s ease, transform 0.25s ease;
-    }
-    .signup-progress .step.active {
-        opacity: 1;
-        transform: translateY(-2px);
-    }
-    .signup-progress .circle {
-        width: 34px;
-        height: 34px;
-        border-radius: 999px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-        border: 2px solid #64748b;
-        background: #020617;
-    }
-    /* ενεργό step = κόκκινο-μπλε σαν το logo */
-    .signup-progress .step.active .circle {
-        background: linear-gradient(135deg, #ef4444, #3b82f6);
-        border-color: transparent;
-        box-shadow: 0 0 15px rgba(248, 113, 113, 0.45);
-    }
-    .signup-progress .line {
-        flex: 1;
-        height: 3px;
-        border-radius: 999px;
-        background: rgba(148, 163, 184, 0.35);
-        overflow: hidden;
-        position: relative;
-    }
-    .signup-progress .line.filled {
-        background: linear-gradient(90deg, #ef4444, #3b82f6);
-    }
-
-    /* fade-in container για τα περιεχόμενα κάθε βήματος */
-    .fade-container {
-        animation: fadeInStep 0.35s ease-out;
-    }
-    @keyframes fadeInStep {
-        from {
-            opacity: 0;
-            transform: translateY(6px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-
 # ----------------- LANGUAGE TEXTS -----------------
 if "lang" not in st.session_state:
     st.session_state["lang"] = "el"
 
-TEXT = {
-    "el": {
-        "title": "02Hero – AI Nutrition Helper",
-        "subtitle": "Έξυπνη διατροφή με τη βοήθεια του AI, προσαρμοσμένη σε εσένα.",
-        "intro": "Δώσε τα στοιχεία σου και άσε το AI να σου φτιάξει ένα εβδομαδιαίο πρόγραμμα διατροφής με βάση τον στόχο σου.",
-        "username": "Όνομα χρήστη (π.χ. email ή ψευδώνυμο)",
-        "age": "Ηλικία",
-        "sex": "Φύλο",
-        "male": "Άνδρας",
-        "female": "Γυναίκα",
-        "height": "Ύψος (cm)",
-        "weight": "Βάρος (kg)",
-        "activity": "Επίπεδο δραστηριότητας",
-        "goal": "Στόχος",
-        "activity_opts": ["Low", "Medium", "High"],
-        "goal_opts": ["Lose fat", "Maintain", "Gain muscle"],
-        "allergies": "Αλλεργίες / τροφές προς αποφυγή",
-        "allergies_ph": "π.χ. αλλεργία σε ξηρούς καρπούς, δυσανεξία στη λακτόζη, δεν τρώω θαλασσινά",
-        "prefs": "Αγαπημένα φαγητά που θα ήθελες να υπάρχουν στο πρόγραμμα",
-        "prefs_ph": "π.χ. κοτόπουλο, ζυμαρικά, γιαούρτι με μέλι, σαλάτες με τόνο",
-        "submit": "Υπολογισμός & Πρόγραμμα AI",
-        "back": "← Αλλαγή στοιχείων & νέο πρόγραμμα",
-        "plan_title": "Εβδομαδιαίο πρόγραμμα διατροφής από το AI",
-        "macros_title": "Εκτίμηση ημερήσιων θερμίδων & macros",
-        "download": "📥 Κατέβασε το πρόγραμμα σε Excel",
-        "download_shop": "🛒 Κατέβασε τη λίστα αγορών (txt)",
-        "disclaimer": "⚠️ Το πρόγραμμα αυτό είναι ενδεικτικό και δεν αντικαθιστά ιατρική ή εξατομικευμένη διαιτολογική συμβουλή.",
-        "qa_title": "Κάνε μια ερώτηση για το πρόγραμμα ή τη διατροφή σου",
-        "qa_your_q": "Η ερώτησή σου:",
-        "qa_button": "Ρώτα το AI",
-        "changes_title": "Αλλαγές στο πρόγραμμα",
-        "changes_desc": "Αν κάτι δεν σου ταιριάζει (π.χ. δεν θέλεις γαλακτοκομικά, θέλεις πιο απλά βραδινά κτλ.), γράψ' το εδώ και το AI θα προσαρμόσει τον πίνακα:",
-        "changes_ph": "π.χ. έχω αντίσταση στην ινσουλίνη, δεν θέλω ψωμί/ζυμαρικά το βράδυ",
-        "changes_button": "Προσαρμογή προγράμματος με βάση τα σχόλιά μου",
-        "need_feedback": "Γράψε πρώτα τι θα ήθελες να αλλάξει.",
-        "history_title": "Ιστορικό",
-        "sidebar_title": "02Hero",
-        "sidebar_sub": "AI Nutrition Helper",
-        "footer": "Created by Adam / 02Hero Coaching",
-        "about_title": "About us & πώς να χρησιμοποιείς το 02Hero",
-        "about_text": (
-            "Το 02Hero Nutrition Helper είναι ένα προσωπικό project coaching που "
-            "χρησιμοποιεί AI (μοντέλα της OpenAI) για να δημιουργεί ιδέες διατροφής "
-            "με βάση τα στοιχεία και τους στόχους σου.\n\n"
-            "➡️ **Τι κάνει καλά:**\n"
-            "- Σε βοηθάει να οργανωθείς και να έχεις ένα ξεκάθαρο εβδομαδιαίο πλάνο.\n"
-            "- Σου δίνει ιδέες για γεύματα, ποσότητες και στόχους macros.\n"
-            "- Προσαρμόζεται στα σχόλιά σου (π.χ. αλλεργίες, προτιμήσεις).\n\n"
-            "⚠️ **Τι ΔΕΝ κάνει:**\n"
-            "- Δεν αντικαθιστά ιατρό, ενδοκρινολόγο ή κλινικό διαιτολόγο.\n"
-            "- Δεν λαμβάνει υπόψη ιατρικό ιστορικό ή εξετάσεις αίματος.\n\n"
-            "📌 Δες το πρόγραμμα σαν ένα **έξυπνο προσχέδιο**: ένα δυνατό σημείο εκκίνησης "
-            "για να οργανώσεις τη διατροφή σου ή να το συζητήσεις με κάποιον ειδικό, "
-            "όχι σαν αυστηρή ιατρική οδηγία."
-        ),
-        # menu items
-        "menu_home": "🏠 Αρχική",
-        "menu_new_plan": "📅 Νέο πλάνο διατροφής",
-        "menu_progress": "📈 Καταγραφή προόδου",
-        "menu_profile": "👤 Προφίλ χρήστη",
-        "menu_about": "ℹ️ Σχετικά με εμάς & τις υπηρεσίες μας",
-        "shopping_title": "Λίστα αγορών για 7 ημέρες",
-        "save_data": "💾 Αποθήκευση στοιχείων (σήμερα)",
-        "saved_ok": "✅ Τα στοιχεία σου αποθηκεύτηκαν για σήμερα.",
-        "saved_err_no_user": "Βάλε πρώτα όνομα χρήστη για να αποθηκεύσω το ιστορικό.",
-        "history_plan_label": "Δες παλιό πρόγραμμα από:",
-        "history_no_plan": "Δεν βρέθηκε αποθηκευμένο πρόγραμμα για αυτή την εγγραφή.",
-        "home_welcome": "Καλώς ήρθες",
-        "home_new_plan": "Δημιούργησε νέο πρόγραμμα διατροφής",
-        "home_progress": "Κατέγραψε την πρόοδό σου",
-        "home_view_plans": "Δες παλιότερα προγράμματά σου",
-        "home_profile": "Ενημέρωσε το προφίλ σου",
-        "profile_title": "Προφίλ χρήστη",
-        "profile_save": "💾 Αποθήκευση προφίλ",
-        "profile_saved": "✅ Το προφίλ σου αποθηκεύτηκε.",
-        "progress_quick_log": "Γρήγορη καταγραφή σημερινού βάρους",
-        "progress_weight_today": "Σημερινό βάρος (kg)",
-        "progress_save": "💾 Αποθήκευση σημερινού βάρους",
-        "progress_saved": "✅ Το βάρος σου για σήμερα αποθηκεύτηκε.",
-        "security_question": "Ποιο είναι το αγαπημένο σου χρώμα;",
-        "security_answer_label": "Απάντηση στην ερώτηση",
-        "signup_step1_label": "1. Στοιχεία σύνδεσης",
-        "signup_step2_label": "2. Στοιχεία προφίλ",
-        # Auth – κοινά
-        "login_title": "Σύνδεση",
-        "login_username": "Όνομα χρήστη",
-        "login_password": "Κωδικός",
-        "login_button": "Σύνδεση",
-        "login_new_user_cta": "🆕 Νέος χρήστης; Δημιούργησε λογαριασμό",
-        "login_forgot_password": "Ξέχασες τον κωδικό;",
-        "login_err_no_username": "❌ Συμπλήρωσε όνομα χρήστη.",
-        "login_err_no_password": "❌ Συμπλήρωσε κωδικό.",
-        "login_err_no_user": "❌ Ο χρήστης δεν υπάρχει.",
-        "login_err_wrong_password": "❌ Λάθος κωδικός.",
-        "login_success": "✅ Επιτυχής σύνδεση!",
-
-        # Signup
-        "signup_title": "🆕 Δημιουργία λογαριασμού",
-        "signup_username": "Όνομα χρήστη (login)",
-        "signup_fullname": "Ονοματεπώνυμο",
-        "signup_password": "Κωδικός",
-        "signup_password_confirm": "Επιβεβαίωση κωδικού",
-        "signup_security_answer": "Απάντηση στη μυστική ερώτηση",
-        "signup_button": "Δημιουργία λογαριασμού",
-        "signup_err_username_missing": "Βάλε όνομα χρήστη.",
-        "signup_err_username_exists": "Το όνομα χρήστη υπάρχει ήδη.",
-        "signup_err_password_missing": "Βάλε κωδικό.",
-        "signup_err_password_mismatch": "Οι κωδικοί δεν ταιριάζουν.",
-        "signup_err_security_missing": "Βάλε απάντηση στη μυστική ερώτηση.",
-        "signup_success": "✅ Ο λογαριασμός δημιουργήθηκε. Μπορείς τώρα να συνδεθείς.",
-        "signup_back_to_login": "Μετάβαση στη σελίδα σύνδεσης",
-
-        # Forgot password
-        "forgot_title": "🔑 Επαναφορά κωδικού",
-        "forgot_intro": "Συμπλήρωσε τα στοιχεία σου για να αλλάξεις τον κωδικό.",
-        "forgot_username": "Όνομα χρήστη",
-        "forgot_new_password": "Νέος κωδικός",
-        "forgot_new_password_confirm": "Επιβεβαίωση νέου κωδικού",
-        "forgot_button": "Αλλαγή κωδικού",
-        "forgot_err_no_user": "Ο χρήστης δεν βρέθηκε.",
-        "forgot_err_no_username": "Συμπλήρωσε όνομα χρήστη.",
-        "forgot_err_no_answer": "Συμπλήρωσε την απάντηση στη μυστική ερώτηση.",
-        "forgot_err_no_stored_answer": "Για αυτόν τον χρήστη δεν έχει οριστεί μυστική απάντηση. Επικοινώνησε με τον διαχειριστή.",
-        "forgot_err_wrong_answer": "Η απάντηση στη μυστική ερώτηση δεν είναι σωστή.",
-        "forgot_err_no_password": "Βάλε νέο κωδικό.",
-        "forgot_err_password_mismatch": "Οι κωδικοί δεν ταιριάζουν.",
-        "forgot_success": "✅ Ο κωδικός ενημερώθηκε. Μπορείς τώρα να συνδεθείς.",
-        "forgot_back_to_login": "Πίσω στη σελίδα σύνδεσης",
-
-        # Logout
-        "logout_button": "🚪 Αποσύνδεση",
-        "onboard_title": "👋 Καλώς ήρθες στο 02Hero",
-        "onboard_body": """
-        Καλώς ήρθες στο 02Hero Nutrition Helper! 🧠💪  
-        
-        ### Πρώτη φορά – τι να κάνεις:
-        1. Συμπλήρωσε τα βασικά στοιχεία σου (ηλικία, βάρος, στόχο κτλ.).
-        2. Πάτα **"Υπολογισμός & Πρόγραμμα AI"** για να φτιάξει το AI το εβδομαδιαίο πλάνο σου.
-        3. Κατέβασε αν θέλεις:
-           - το πλάνο σε **Excel**
-           - τη **λίστα αγορών** για το σούπερ μάρκετ.
-        
-        ### Τι θα ξεκλειδώσεις μετά:
-        - Μετά την πρώτη αποθήκευση θα εμφανιστεί η σελίδα **"Καταγραφή Προόδου"**  
-          όπου βλέπεις αλλαγή βάρους & παλαιότερα πλάνα.
-        - Στο **"Προφίλ"** μπορείς να αλλάζεις ανά πάσα στιγμή τα στοιχεία σου.
-        
-        Καλή αρχή! 🚀
-        """,
-        "onboard_button": "Ξεκινάμε 🚀",
-
-    },
-    "en": {
-        "security_question": "What is your favourite color?",
-        "security_answer_label": "Answer to the secret question",
-        "title": "02Hero – AI Nutrition Helper",
-        "subtitle": "Smart, AI-powered nutrition tailored to you.",
-        "intro": "Enter your details and let the AI create a weekly meal plan based on your goal.",
-        "username": "User name (e.g. email or nickname)",
-        "age": "Age",
-        "sex": "Sex",
-        "male": "Male",
-        "female": "Female",
-        "height": "Height (cm)",
-        "weight": "Weight (kg)",
-        "activity": "Activity level",
-        "goal": "Goal",
-        "activity_opts": ["Low", "Medium", "High"],
-        "goal_opts": ["Lose fat", "Maintain", "Gain muscle"],
-        "allergies": "Allergies / foods to avoid",
-        "allergies_ph": "e.g. nut allergy, lactose intolerance, no seafood",
-        "prefs": "Favourite foods you’d like to see in your plan",
-        "prefs_ph": "e.g. chicken, pasta, yogurt with honey, tuna salads",
-        "submit": "Calculate & Generate AI Plan",
-        "back": "← Change details & new plan",
-        "plan_title": "Weekly nutrition plan from AI",
-        "macros_title": "Estimated daily calories & macros",
-        "download": "📥 Download plan as Excel",
-        "download_shop": "🛒 Download shopping list (txt)",
-        "disclaimer": "⚠️ This plan is indicative and does not replace medical or personalised dietitian advice.",
-        "qa_title": "Ask a question about your plan or nutrition",
-        "qa_your_q": "Your question:",
-        "qa_button": "Ask AI",
-        "changes_title": "Changes to the plan",
-        "changes_desc": "If something doesn’t work for you (e.g. you don’t want dairy, prefer simpler dinners), write it here and the AI will adjust the table:",
-        "changes_ph": "e.g. I have insulin resistance, prefer low carbs at night",
-        "changes_button": "Adjust plan based on my comments",
-        "need_feedback": "Write what you’d like to change first.",
-        "history_title": "History",
-        "sidebar_title": "02Hero",
-        "sidebar_sub": "AI Nutrition Helper",
-        "footer": "Created by Adam / 02Hero Coaching",
-        "about_title": "About us & how to use 02Hero",
-        "about_text": (
-            "02Hero Nutrition Helper is a personal coaching project that uses AI "
-            "(OpenAI models) to generate nutrition ideas based on your details and goals.\n\n"
-            "➡️ **What it’s good at:**\n"
-            "- Helps you organise and visualise a weekly plan.\n"
-            "- Suggests meals, quantities and macro targets.\n"
-            "- Adapts to your comments (e.g. allergies, preferences).\n\n"
-            "⚠️ **What it’s NOT:**\n"
-            "- It does not replace a doctor, endocrinologist or registered dietitian.\n"
-            "- It does not take into account full medical history or lab results.\n\n"
-            "📌 Treat the plan as a **smart draft**: a strong starting point to organise "
-            "your diet or discuss with a professional, not as strict medical advice."
-        ),
-        "menu_home": "🏠 Home",
-        "menu_new_plan": "📅 New nutrition plan",
-        "menu_progress": "📈 Progress tracking",
-        "menu_profile": "👤 User profile",
-        "menu_about": "ℹ️ About us & our services",
-        "shopping_title": "Shopping list for 7 days",
-        "save_data": "💾 Save today's data",
-        "saved_ok": "✅ Your data for today has been saved.",
-        "saved_err_no_user": "Please enter a user name first so I can save your history.",
-        "history_plan_label": "View past plan from:",
-        "history_no_plan": "No saved plan found for this entry.",
-        "login_title": "Log in",
-        "login_button": "Continue",
-        "home_welcome": "Welcome",
-        "home_new_plan": "Create a new nutrition plan",
-        "home_progress": "Track your progress",
-        "home_view_plans": "View your past plans",
-        "home_profile": "Update your profile",
-        "profile_title": "User profile",
-        "profile_save": "💾 Save profile",
-        "profile_saved": "✅ Your profile has been saved.",
-        "progress_quick_log": "Quick log of today's weight",
-        "progress_weight_today": "Today's weight (kg)",
-        "progress_save": "💾 Save today's weight",
-        "progress_saved": "✅ Your weight for today has been saved.",
-# Auth – common
-        "login_title": "Login",
-        "login_username": "Username",
-        "login_password": "Password",
-        "login_button": "Login",
-        "login_new_user_cta": "🆕 New here? Create an account",
-        "login_forgot_password": "Forgot password?",
-        "login_err_no_username": "❌ Please enter a username.",
-        "login_err_no_password": "❌ Please enter a password.",
-        "login_err_no_user": "❌ User does not exist.",
-        "login_err_wrong_password": "❌ Incorrect password.",
-        "login_success": "✅ Login successful!",
-
-        # Signup
-        "signup_title": "🆕 Create an account",
-        "signup_username": "Username (login)",
-        "signup_fullname": "Full name",
-        "signup_password": "Password",
-        "signup_password_confirm": "Confirm password",
-        "signup_security_answer": "Answer to the secret question",
-        "signup_button": "Create account",
-        "signup_err_username_missing": "Please enter a username.",
-        "signup_err_username_exists": "This username already exists.",
-        "signup_err_password_missing": "Please enter a password.",
-        "signup_err_password_mismatch": "Passwords do not match.",
-        "signup_err_security_missing": "Please enter an answer to the secret question.",
-        "signup_success": "✅ Account created. You can now log in.",
-        "signup_back_to_login": "Back to login page",
-
-        # Forgot password
-        "forgot_title": "🔑 Reset password",
-        "forgot_intro": "Fill in your details to change your password.",
-        "forgot_username": "Username",
-        "forgot_new_password": "New password",
-        "forgot_new_password_confirm": "Confirm new password",
-        "forgot_button": "Change password",
-        "forgot_err_no_user": "User not found.",
-        "forgot_err_no_username": "Please enter a username.",
-        "forgot_err_no_answer": "Please enter the answer to the secret question.",
-        "forgot_err_no_stored_answer": "No secret answer stored for this user. Contact the administrator.",
-        "forgot_err_wrong_answer": "The answer to the secret question is not correct.",
-        "forgot_err_no_password": "Please enter a new password.",
-        "forgot_err_password_mismatch": "Passwords do not match.",
-        "forgot_success": "✅ Password updated. You can now log in.",
-        "forgot_back_to_login": "Back to login page",
-
-        # Security question
-        "security_question": "What is your favourite color?",
-        "security_answer_label": "Answer to the secret question",
-
-        # Logout
-        "logout_button": "🚪 Logout",
-        "onboard_title": "👋 Welcome to 02Hero",
-        "onboard_body": """
-        Welcome to the 02Hero Nutrition Helper! 🧠💪  
-        
-        ### First time using the app? Here’s what to do:
-        1. Fill in your basic details (age, weight, goal, etc.).
-        2. Press **“Calculate & AI Meal Plan”** to generate your weekly plan.
-        3. You can download:
-           - the full plan in **Excel**
-           - the **shopping list** for the supermarket.
-        
-        ### What unlocks after the first save:
-        - After saving your first plan, the **Progress Tracking** page becomes available.
-        - From your **Profile**, you can update your data anytime.
-        
-        Ready to start? 🚀
-        """,
-        "onboard_button": "Let's start 🚀",
-        "signup_step1_label": "1. Login details",
-        "signup_step2_label": "2. Profile details",
-    },
-}
-
-DAY_LABELS = {
-    "el": ["Δευτέρα", "Τρίτη", "Τετάρτη", "Πέμπτη", "Παρασκευή", "Σάββατο", "Κυριακή"],
-    "en": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-}
-MEAL_LABELS = {
-    "el": ["Πρωινό", "Δεκατιανό", "Μεσημεριανό", "Απογευματινό", "Βραδινό", "Πριν τον ύπνο"],
-    "en": ["Breakfast", "Mid-morning snack", "Lunch", "Afternoon snack", "Dinner", "Before bed"],
-}
-
-
 def tr(key: str) -> str:
-    return TEXT[st.session_state["lang"]][key]
-
-
-# ----------------- STORAGE -----------------
-DATA_DIR = Path("user_data")
-DATA_DIR.mkdir(exist_ok=True)
-HISTORY_FILE = DATA_DIR / "history.csv"
-PROFILE_FILE = DATA_DIR / "profiles.csv"
-
-
-def calculate_targets(age, sex, height_cm, weight_kg, activity, goal):
-    """Rough calories & macros."""
-    if sex == "male":
-        bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age + 5
-    else:
-        bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age - 161
-
-    activity_factors = {"Low": 1.2, "Medium": 1.4, "High": 1.6}
-    tdee = bmr * activity_factors.get(activity, 1.4)
-
-    if goal == "Lose fat":
-        calories = tdee - 400
-    elif goal == "Gain muscle":
-        calories = tdee + 300
-    else:
-        calories = tdee
-
-    protein_g = 2.0 * weight_kg
-    fat_g = 0.8 * weight_kg
-    protein_kcal = protein_g * 4
-    fat_kcal = fat_g * 9
-    carbs_kcal = max(calories - protein_kcal - fat_kcal, 0)
-    carbs_g = carbs_kcal / 4
-
-    return {
-        "calories": int(round(calories)),
-        "protein_g": int(round(protein_g)),
-        "carbs_g": int(round(carbs_g)),
-        "fat_g": int(round(fat_g)),
-    }
-
-
-def markdown_table_to_df(md: str):
-    if not md:
-        return None
-    lines = [l.strip() for l in md.splitlines() if l.strip().startswith("|")]
-    if len(lines) < 3:
-        return None
-    header_line = lines[0].strip("|")
-    headers = [h.strip() for h in header_line.split("|")]
-    data_lines = lines[2:]
-    rows = []
-    for dl in data_lines:
-        parts = [p.strip() for p in dl.strip("|").split("|")]
-        if len(parts) == len(headers):
-            rows.append(parts)
-    if not rows:
-        return None
-    return pd.DataFrame(rows, columns=headers)
-
-
-def save_history_for_today(username, age, sex, height, weight, activity, goal, targets, plan_markdown):
-    """Save/update one entry per user per day."""
-    username = (username or "").strip()
-    if not username:
-        return False
-
-    today_str = date.today().isoformat()
-    row = {
-        "timestamp": datetime.now().isoformat(timespec="seconds"),
-        "date": today_str,
-        "username": username,
-        "age": age,
-        "sex": sex,
-        "height_cm": height,
-        "weight_kg": weight,
-        "activity": activity,
-        "goal": goal,
-        "calories": targets["calories"],
-        "protein_g": targets["protein_g"],
-        "carbs_g": targets["carbs_g"],
-        "fat_g": targets["fat_g"],
-        "plan_markdown": plan_markdown,
-    }
-
-    if HISTORY_FILE.exists():
-        df = pd.read_csv(HISTORY_FILE)
-    else:
-        df = pd.DataFrame(columns=row.keys())
-
-    for col in row.keys():
-        if col not in df.columns:
-            df[col] = pd.NA
-
-    mask = (df["username"] == username) & (df["date"] == today_str)
-    df = df[~mask]
-
-    df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
-    df.to_csv(HISTORY_FILE, index=False)
-    return True
-
-
-def load_profile(username: str):
-    username = (username or "").strip()
-    if not username or not PROFILE_FILE.exists():
-        return
-    df = pd.read_csv(PROFILE_FILE)
-    row = df[df["username"] == username]
-    if row.empty:
-        return
-    row = row.iloc[0]
-    for field in ["age", "sex", "height_cm", "weight_kg", "activity", "goal", "allergies", "preferred_foods"]:
-        if field in row and pd.notna(row[field]):
-            if field == "age":
-                st.session_state["age"] = int(row[field])
-            elif field == "height_cm":
-                st.session_state["height"] = int(row[field])
-            elif field == "weight_kg":
-                st.session_state["weight"] = float(row[field])
-            elif field in ["activity", "goal"]:
-                st.session_state[field] = str(row[field])
-            elif field == "sex":
-                st.session_state["sex"] = str(row[field])
-            elif field == "allergies":
-                st.session_state["allergies"] = str(row[field])
-            elif field == "preferred_foods":
-                st.session_state["preferred_foods"] = str(row[field])
-
-
-def save_profile(username: str):
-    username = (username or "").strip()
-    if not username:
-        return False
-
-    row = {
-        "username": username,
-        "age": int(st.session_state["age"]),
-        "sex": st.session_state["sex"],
-        "height_cm": int(st.session_state["height"]),
-        "weight_kg": float(st.session_state["weight"]),
-        "activity": st.session_state["activity"],
-        "goal": st.session_state["goal"],
-        "allergies": st.session_state["allergies"],
-        "preferred_foods": st.session_state["preferred_foods"],
-    }
-
-    if PROFILE_FILE.exists():
-        df = pd.read_csv(PROFILE_FILE)
-    else:
-        df = pd.DataFrame(columns=row.keys())
-
-    for col in row.keys():
-        if col not in df.columns:
-            df[col] = pd.NA
-
-    df = df[df["username"] != username]
-    df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
-    df.to_csv(PROFILE_FILE, index=False)
-    return True
+    lang = st.session_state.get("lang", "el")
+    return tr_raw(lang, key)
 
 def delete_account(username: str):
     """Delete user completely and log them out."""
@@ -1032,33 +134,30 @@ def delete_account(username: str):
     st.session_state["new_user"] = False
     st.session_state["page"] = "login"
 
-    st.success("Ο λογαριασμός σου διαγράφηκε με επιτυχία.")
+    st.success(tr("delete_success"))
     st.rerun()
 
-@st.dialog("⚠️ Διαγραφή λογαριασμού")
+@st.dialog(tr("delete_dialog_title"))
 def delete_dialog(username: str):
-    st.write(
-        "Αυτή η ενέργεια **δεν μπορεί να αναιρεθεί**. "
-        "Όλα τα δεδομένα σου θα χαθούν οριστικά."
-    )
+    st.write(tr("delete_dialog_body"))
 
     confirm_text = st.text_input(
-        "Για επιβεβαίωση, γράψε το όνομα χρήστη σου:",
+        tr("delete_dialog_confirm_label"),
         placeholder=username,
         key="dialog_delete_confirm_input",
     )
 
     col1, col2 = st.columns(2)
     with col1:
-        confirm = st.button("Ναι, διαγραφή", key="dialog_do_delete")
+        confirm = st.button(tr("delete_dialog_yes"), key="dialog_do_delete")
     with col2:
-        cancel = st.button("Άκυρο", key="dialog_cancel_delete")
+        cancel = st.button(tr("delete_dialog_cancel"), key="dialog_cancel_delete")
 
     if confirm:
         if confirm_text.strip().lower() == username.lower():
             delete_account(username)
         else:
-            st.error("Το όνομα χρήστη δεν ταιριάζει. Η διαγραφή ακυρώθηκε.")
+            st.error(tr("delete_dialog_error_mismatch"))
 
     if cancel:
         # Κλείνει το dialog χωρίς να κάνει τίποτα
@@ -1327,7 +426,7 @@ def signup_page():
                 })
 
                 # Save σε profiles.csv
-                save_profile(data["username"])
+                save_profile(data["username"],st.session_state)
 
                 # reset wizard
                 st.session_state["signup_step"] = 1
@@ -1632,7 +731,7 @@ if not st.session_state.get("logged_in", False):
                         st.session_state["username"] = actual_key
                         st.session_state["role"] = users[actual_key].get("role", "user")
                         update_last_login(actual_key)
-                        load_profile(actual_key)
+                        load_profile(actual_key,st.session_state)
 
                         # 👉 Όλοι οι “normal” χρήστες πάνε στο new_plan
                         if st.session_state["role"] == "admin":
@@ -1703,61 +802,34 @@ if page == "home":
         st.rerun()
 
     # Λίγη σύνοψη από το ιστορικό αν υπάρχει
-    if username and HISTORY_FILE.exists():
-        df_hist = pd.read_csv(HISTORY_FILE)
-        user_hist = df_hist[df_hist["username"] == username].copy()
-        if not user_hist.empty:
-            user_hist["timestamp"] = pd.to_datetime(user_hist["timestamp"])
-            user_hist = user_hist.sort_values("timestamp")
-            last_row = user_hist.iloc[-1]
-            start_row = user_hist.iloc[0]
-            diff = round(last_row["weight_kg"] - start_row["weight_kg"], 1)
+    user_hist = load_user_history(username)
 
-            if lang == "el":
-                st.markdown(
-                    f"""
-                    <div style="
-                        margin-top:1.5rem; 
-                        padding:1rem 1.2rem; 
-                        border-radius:0.75rem;
-                        background-color: rgba(255,255,255,0.03);
-                        border: 1px solid rgba(255,255,255,0.12);
-                    ">
-                        <div style="font-weight:600; margin-bottom:0.5rem;">
-                            Μικρή σύνοψη προόδου
-                        </div>
-                        <div style="font-size:0.9rem; line-height:1.5;">
-                            • Τελευταία καταγραφή βάρους: <b>{last_row['weight_kg']} kg</b><br>
-                            • Πρώτη καταγραφή: <b>{start_row['weight_kg']} kg</b><br>
-                            • Αλλαγή: <b>{diff} kg</b>
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.markdown(
-                    f"""
-                    <div style="
-                        margin-top:1.5rem; 
-                        padding:1rem 1.2rem; 
-                        border-radius:0.75rem;
-                        background-color: rgba(255,255,255,0.03);
-                        border: 1px solid rgba(255,255,255,0.12);
-                    ">
-                        <div style="font-weight:600; margin-bottom:0.5rem;">
-                            Quick progress summary
-                        </div>
-                        <div style="font-size:0.9rem; line-height:1.5;">
-                            • Last recorded weight: <b>{last_row['weight_kg']} kg</b><br>
-                            • First recorded weight: <b>{start_row['weight_kg']} kg</b><br>
-                            • Change: <b>{diff} kg</b>
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+    if user_hist is not None:
+        last_row = user_hist.iloc[-1]
+        start_row = user_hist.iloc[0]
+        diff = round(last_row["weight_kg"] - start_row["weight_kg"], 1)
 
+        st.markdown(
+            f"""
+            <div style="
+                margin-top:1.5rem; 
+                padding:1rem 1.2rem; 
+                border-radius:0.75rem;
+                background-color: rgba(255,255,255,0.03);
+                border: 1px solid rgba(255,255,255,0.12);
+            ">
+                <div style="font-weight:600; margin-bottom:0.5rem;">
+                    {tr("home_summary_title")}
+                </div>
+                <div style="font-size:0.9rem; line-height:1.5;">
+                    • {tr("home_summary_last")}: <b>{last_row['weight_kg']} kg</b><br>
+                    • {tr("home_summary_first")}: <b>{start_row['weight_kg']} kg</b><br>
+                    • {tr("home_summary_change")}: <b>{diff} kg</b>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 # PROFILE PAGE
@@ -1816,7 +888,7 @@ elif page == "profile":
         if not (st.session_state.get("username") or "").strip():
             st.warning(tr("saved_err_no_user"))
         else:
-            save_profile(st.session_state["username"])
+            save_profile(st.session_state["username"], st.session_state)
             st.success(tr("profile_saved"))
 
     st.write("---")
@@ -1824,14 +896,14 @@ elif page == "profile":
     # ---------- DELETE ACCOUNT SECTION ----------
     col_title, col_btn = st.columns([4, 1])
     with col_title:
-        st.subheader("⚠️ Διαγραφή λογαριασμού")
-        st.caption("Αυτή η ενέργεια είναι οριστική και δεν μπορεί να αναιρεθεί.")
+        st.subheader(tr("profile_delete_title"))
+        st.caption(tr("profile_delete_caption"))
     with col_btn:
         delete_clicked = st.button(
-            "🗑️ Διαγραφή",
+            tr("profile_delete_button"),
             key="open_delete",
             use_container_width=True,
-            type="primary",  # <-- αυτό
+            type="primary",
         )
 
     if delete_clicked:
@@ -1906,126 +978,48 @@ elif page == "new_plan":
                 st.error("OPENAI_API_KEY is missing in your .env file.")
             else:
                 try:
+                    lang = st.session_state["lang"]
+
+                    age = int(st.session_state["age"])
+                    sex_raw = st.session_state["sex"]  # "male" ή "female"
+                    height = int(st.session_state["height"])
+                    weight = float(st.session_state["weight"])
+                    activity = st.session_state["activity"]
+                    goal = st.session_state["goal"]
+                    allergies = st.session_state["allergies"]
+                    prefs = st.session_state["preferred_foods"]
+
                     with st.spinner(
                             "Generating your plan with AI..."
-                            if st.session_state["lang"] == "en"
+                            if lang == "en"
                             else "Φτιάχνω το πρόγραμμα με AI..."
                     ):
-                        lang = st.session_state["lang"]
-
-                        age = int(st.session_state["age"])
-                        sex_raw = st.session_state["sex"]  # "male" ή "female"
-                        sex_gr = "άνδρας" if sex_raw == "male" else "γυναίκα"
-                        sex_en = "male" if sex_raw == "male" else "female"
-                        height = int(st.session_state["height"])
-                        weight = float(st.session_state["weight"])
-                        activity = st.session_state["activity"]
-                        goal = st.session_state["goal"]
-                        allergies = st.session_state["allergies"]
-                        prefs = st.session_state["preferred_foods"]
-
-                        if lang == "el":
-                            plan_prompt = f"""
-                        Είμαι {age} ετών, {sex_gr}, ύψος {height} cm και βάρος {weight} kg.
-                        Επίπεδο δραστηριότητας: {activity}.
-                        Στόχος: {goal}.
-
-                        Αλλεργίες / τρόφιμα προς αποφυγή: {allergies or "καμία"}.
-                        Αγαπημένα φαγητά: {prefs or "ό,τι ταιριάζει στον στόχο"}.
-
-                        Θέλω ένα ΕΒΔΟΜΑΔΙΑΙΟ πρόγραμμα διατροφής σε μορφή πίνακα Markdown
-                        με **στήλες = ημέρες** και **γραμμές = τύποι γευμάτων**.
-
-                        Στήλες (με αυτή τη σειρά):
-                        - Γεύμα
-                        - Δευτέρα
-                        - Τρίτη
-                        - Τετάρτη
-                        - Πέμπτη
-                        - Παρασκευή
-                        - Σάββατο
-                        - Κυριακή
-
-                        Γραμμές (με αυτή τη σειρά):
-                        - Πρωινό
-                        - Δεκατιανό
-                        - Μεσημεριανό
-                        - Απογευματινό
-                        - Βραδινό
-                        - Πριν τον ύπνο
-
-                        Σε κάθε κελί γράψε:
-                        • σύντομη περιγραφή του γεύματος  
-                        • + ενδεικτική ποσότητα (π.χ. "κοτόπουλο με ρύζι (150 g κοτόπουλο, 100 g ρύζι)")
-
-                        Πολύ σημαντικό:
-                        - Επιστρέφεις ΜΟΝΟ τον πίνακα σε Markdown.
-                        - Καμία εξήγηση πριν ή μετά.
-                        """
-
-                        else:
-                            plan_prompt = f"""
-                        I am {age} years old, {sex_en}, {height} cm tall and {weight} kg.
-                        Activity level: {activity}.
-                        Goal: {goal}.
-
-                        Allergies / foods to avoid: {allergies or "none"}.
-                        Favourite foods: {prefs or "anything that fits the goal"}.
-
-                        Create a WEEKLY meal plan as a Markdown table
-                        with **columns = days** and **rows = meal types**.
-
-                        Columns (in this exact order):
-                        - Meal
-                        - Monday
-                        - Tuesday
-                        - Wednesday
-                        - Thursday
-                        - Friday
-                        - Saturday
-                        - Sunday
-
-                        Rows (in this exact order):
-                        - Breakfast
-                        - Mid-morning snack
-                        - Lunch
-                        - Afternoon snack
-                        - Dinner
-                        - Before bed
-
-                        In each cell include:
-                        • a short description of the meal  
-                        • + approximate quantity (e.g. "chicken with rice (150 g chicken, 100 g rice)")
-
-                        Very important:
-                        - Return ONLY the table in Markdown.
-                        - No explanation before or after.
-
-                        """
-
-                        response = client.chat.completions.create(
-                            model="gpt-4o-mini",
-                            temperature=0,
-                            messages=[
-                                {
-                                    "role": "system",
-                                    "content": "You are a helpful, precise nutrition assistant.",
-                                },
-                                {"role": "user", "content": plan_prompt},
-                            ],
+                        plan_md = generate_weekly_plan(
+                            lang=lang,
+                            age=age,
+                            sex=sex_raw,
+                            height=height,
+                            weight=weight,
+                            activity=activity,
+                            goal=goal,
+                            allergies=allergies,
+                            preferred_foods=prefs,
                         )
-                    st.session_state["plan"] = response.choices[0].message.content
+
+                    st.session_state["plan"] = plan_md
                     st.session_state["show_form"] = False
                     st.session_state["qa_history"] = []
                     st.session_state["qa_input"] = ""
                     st.rerun()
-                except Exception as e:
+
+                except Exception:
                     msg = (
                         "Κάτι πήγε στραβά με το AI. Δοκίμασε ξανά σε λίγο."
                         if st.session_state["lang"] == "el"
                         else "Something went wrong with the AI. Please try again later."
                     )
                     st.error(msg)
+
 
 
     else:
@@ -2281,197 +1275,73 @@ elif page == "new_plan":
                     # μετά την πρώτη αποθήκευση δεν θεωρείται πια "νέος"
                     st.session_state["new_user"] = False
 
-                st.write("---")
+        # ---------------- Q&A SECTION (χωρίς έξτρα ---) ----------------
+        st.markdown("")
+        st.subheader(tr("qa_title"))
 
-                # Q&A SECTION
-                st.subheader(tr("qa_title"))
+        if st.session_state["qa_history"]:
+            for msg in st.session_state["qa_history"][-6:]:
+                who = (
+                    "Εσύ"
+                    if (msg["role"] == "user" and lang == "el")
+                    else ("You" if msg["role"] == "user" else "AI")
+                )
+                st.markdown(f"**{who}:** {msg['content']}")
 
-                if st.session_state["qa_history"]:
-                    for msg in st.session_state["qa_history"][-6:]:
-                        who = (
-                            "Εσύ"
-                            if (msg["role"] == "user" and lang == "el")
-                            else ("You" if msg["role"] == "user" else "AI")
-                        )
-                        st.markdown(f"**{who}:** {msg['content']}")
+        # Απλό input + button (χωρίς form)
+        st.session_state["qa_input"] = st.text_input(
+            tr("qa_your_q"),
+            value=st.session_state["qa_input"],
+        )
+        send_q = st.button(tr("qa_button"))
 
-                # φόρμα μόνο για input + submit
-                with st.form("qa_form"):
-                    st.session_state["qa_input"] = st.text_input(
-                        tr("qa_your_q"),
-                        value=st.session_state["qa_input"],
+        # λογική Q&A ΕΞΩ από τη φόρμα
+        if send_q and st.session_state["qa_input"].strip():
+            if not client:
+                st.error(
+                    "Δεν υπάρχει διαθέσιμο AI αυτή τη στιγμή."
+                    if lang == "el"
+                    else "AI is not available right now."
+                )
+            else:
+                question = st.session_state["qa_input"].strip()
+                st.session_state["qa_history"].append(
+                    {"role": "user", "content": question}
+                )
+
+                plan_text = st.session_state["plan"]
+
+                try:
+                    with st.spinner(
+                            "Το AI σκέφτεται..." if lang == "el" else "AI is thinking..."
+                    ):
+                        answer = answer_plan_question(lang, plan_text, question)
+
+                    st.session_state["qa_history"].append(
+                        {"role": "assistant", "content": answer}
                     )
-                    send_q = st.form_submit_button(tr("qa_button"))
+                    st.session_state["qa_input"] = ""
+                    st.rerun()
 
-                # λογική Q&A ΕΞΩ από τη φόρμα
-                if send_q and st.session_state["qa_input"].strip():
-                    if not client:
-                        st.error(
-                            "Δεν υπάρχει διαθέσιμο AI αυτή τη στιγμή."
-                            if lang == "el"
-                            else "AI is not available right now."
-                        )
-                    else:
-                        question = st.session_state["qa_input"].strip()
-                        st.session_state["qa_history"].append(
-                            {"role": "user", "content": question}
-                        )
-
-                        plan_text = st.session_state["plan"]
-
-                        if lang == "el":
-                            qa_prompt = f"""
-                Αυτό είναι το εβδομαδιαίο πρόγραμμα διατροφής του χρήστη σε πίνακα Markdown:
-                
-                {plan_text}
-                
-                Ο χρήστης ρωτάει:
-                {question}
-                
-                Απάντησε στα ελληνικά, με πρακτικές και συγκεκριμένες συμβουλές.
-                Μπορείς να αναφέρεσαι στο πλάνο, αλλά ΜΗΝ ξαναγράφεις όλο τον πίνακα.
-                """
-                        else:
-                            qa_prompt = f"""
-                Here is the user's weekly nutrition plan as a Markdown table:
-                
-                {plan_text}
-                
-                The user asks:
-                {question}
-                
-                Answer in clear, practical English.
-                You may refer to parts of the plan but do NOT rewrite the whole table.
-                """
-
-                        try:
-                            with st.spinner(
-                                    "Το AI σκέφτεται..." if lang == "el" else "AI is thinking..."
-                            ):
-                                qa_resp = client.chat.completions.create(
-                                    model="gpt-4o-mini",
-                                    temperature=0.4,
-                                    messages=[
-                                        {
-                                            "role": "system",
-                                            "content": "You are a helpful, practical nutrition coach.",
-                                        },
-                                        {"role": "user", "content": qa_prompt},
-                                    ],
-                                )
-
-                            answer = qa_resp.choices[0].message.content
-                            st.session_state["qa_history"].append(
-                                {"role": "assistant", "content": answer}
-                            )
-                            st.session_state["qa_input"] = ""
-                            st.rerun()
-
-                        except Exception:
-                            err_msg = (
-                                "Κάτι πήγε στραβά με την απάντηση του AI. Προσπάθησε ξανά αργότερα."
-                                if lang == "el"
-                                else "Something went wrong while getting the AI answer. Please try again later."
-                            )
-                            st.error(err_msg)
-
-                st.write("---")
-
-                # CHANGES SECTION
-                st.subheader(tr("changes_title"))
-                st.write(tr("changes_desc"))
-
-                with st.form("changes_form"):
-                    feedback = st.text_area(
-                        "Τι θα ήθελες να αλλάξει στο πρόγραμμα;"
+                except Exception:
+                    err_msg = (
+                        "Κάτι πήγε στραβά με την απάντηση του AI. Προσπάθησε ξανά αργότερα."
                         if lang == "el"
-                        else "What would you like to change in the plan?",
-                        placeholder=tr("changes_ph"),
+                        else "Something went wrong while getting the AI answer. Please try again later."
                     )
-                    apply_changes = st.form_submit_button(tr("changes_button"))
+                    st.error(err_msg)
 
-                if apply_changes:
-                    if not feedback.strip():
-                        st.warning(tr("need_feedback"))
-                    elif not client:
-                        st.error(
-                            "Το AI δεν είναι διαθέσιμο αυτή τη στιγμή."
-                            if lang == "el"
-                            else "AI is not available right now."
-                        )
-                    else:
-                        if lang == "el":
-                            adjust_prompt = f"""
-                Εδώ είναι το τωρινό εβδομαδιαίο πρόγραμμα διατροφής σε πίνακα Markdown:
-                
-                {st.session_state["plan"]}
-                
-                Ο χρήστης έγραψε τα εξής σχόλια / αλλαγές που θέλει:
-                {feedback}
-                
-                Φτιάξε ΝΕΟ πρόγραμμα, με την ίδια ακριβώς μορφή πίνακα (ίδιες στήλες, ίδιες ημέρες, ίδια γεύματα),
-                αλλά προσαρμοσμένο στις επιθυμίες του χρήστη.
-                
-                Πολύ σημαντικό:
-                - Γράψε μόνο τον πίνακα σε μορφή Markdown.
-                - Μην προσθέσεις επιπλέον κείμενο.
-                """
-                        else:
-                            adjust_prompt = f"""
-                Here is the current weekly diet plan as a Markdown table:
-                
-                {st.session_state["plan"]}
-                
-                The user wants the following changes:
-                {feedback}
-                
-                Create a NEW plan, with the exact same table structure (same days, same meal rows),
-                but adjusted to the user's comments.
-                
-                Important:
-                - Return ONLY the table in Markdown format.
-                - Do NOT add any extra text.
-                """
-
-                        try:
-                            with st.spinner(
-                                    "Προσαρμόζω το πρόγραμμα..." if lang == "el" else "Adjusting the plan..."
-                            ):
-                                new_resp = client.chat.completions.create(
-                                    model="gpt-4o-mini",
-                                    temperature=0,
-                                    messages=[
-                                        {
-                                            "role": "system",
-                                            "content": "You are a helpful nutrition assistant.",
-                                        },
-                                        {"role": "user", "content": adjust_prompt},
-                                    ],
-                                )
-                            st.session_state["plan"] = new_resp.choices[0].message.content
-                            st.rerun()
-                        except Exception:
-                            err_msg = (
-                                "Κάτι πήγε στραβά με την προσαρμογή του πλάνου. Προσπάθησε ξανά."
-                                if lang == "el"
-                                else "Something went wrong while adjusting the plan. Please try again."
-                            )
-                            st.error(err_msg)
-
-                st.write("---")
-
-        # CHANGES SECTION
+        # ---------------- CHANGES SECTION (χωρίς extra πλαίσιο) ----------------
         st.subheader(tr("changes_title"))
         st.write(tr("changes_desc"))
 
-        with st.form("changes_form"):
-            feedback = st.text_area(
-                "Τι θα ήθελες να αλλάξει στο πρόγραμμα;"
-                if lang == "el"
-                else "What would you like to change in the plan?",
-                placeholder=tr("changes_ph"),
-            )
-            apply_changes = st.form_submit_button(tr("changes_button"))
+        feedback = st.text_area(
+            "Τι θα ήθελες να αλλάξει στο πρόγραμμα;"
+            if lang == "el"
+            else "What would you like to change in the plan?",
+            placeholder=tr("changes_ph"),
+        )
+        apply_changes = st.button(tr("changes_button"))
 
         if apply_changes:
             if not feedback.strip():
@@ -2483,56 +1353,19 @@ elif page == "new_plan":
                     else "AI is not available right now."
                 )
             else:
-                if lang == "el":
-                    adjust_prompt = f"""
-        Εδώ είναι το τωρινό εβδομαδιαίο πρόγραμμα διατροφής σε πίνακα Markdown:
-
-        {st.session_state["plan"]}
-
-        Ο χρήστης έγραψε τα εξής σχόλια / αλλαγές που θέλει:
-        {feedback}
-
-        Φτιάξε ΝΕΟ πρόγραμμα, με την ίδια ακριβώς μορφή πίνακα (ίδιες στήλες, ίδιες ημέρες, ίδια γεύματα),
-        αλλά προσαρμοσμένο στις επιθυμίες του χρήστη.
-
-        Πολύ σημαντικό:
-        - Γράψε μόνο τον πίνακα σε μορφή Markdown.
-        - Μην προσθέσεις επιπλέον κείμενο.
-        """
-                else:
-                    adjust_prompt = f"""
-        Here is the current weekly diet plan as a Markdown table:
-
-        {st.session_state["plan"]}
-
-        The user wants the following changes:
-        {feedback}
-
-        Create a NEW plan, with the exact same table structure (same days, same meal rows),
-        but adjusted to the user's comments.
-
-        Important:
-        - Return ONLY the table in Markdown format.
-        - Do NOT add any extra text.
-        """
-
                 try:
                     with st.spinner(
                             "Προσαρμόζω το πρόγραμμα..." if lang == "el" else "Adjusting the plan..."
                     ):
-                        new_resp = client.chat.completions.create(
-                            model="gpt-4o-mini",
-                            temperature=0,
-                            messages=[
-                                {
-                                    "role": "system",
-                                    "content": "You are a helpful nutrition assistant.",
-                                },
-                                {"role": "user", "content": adjust_prompt},
-                            ],
+                        new_plan_md = adjust_weekly_plan(
+                            lang=lang,
+                            current_plan_md=st.session_state["plan"],
+                            feedback=feedback,
                         )
-                    st.session_state["plan"] = new_resp.choices[0].message.content
+
+                    st.session_state["plan"] = new_plan_md
                     st.rerun()
+
                 except Exception:
                     err_msg = (
                         "Κάτι πήγε στραβά με την προσαρμογή του πλάνου. Προσπάθησε ξανά."
@@ -2540,6 +1373,8 @@ elif page == "new_plan":
                         else "Something went wrong while adjusting the plan. Please try again."
                     )
                     st.error(err_msg)
+
+    # st.write("---")
 
 
 # PROGRESS PAGE (ιστορικό + γρήγορο log + παλιά πλάνα)
@@ -2584,67 +1419,73 @@ elif page == "progress":
 
     st.write("---")
 
-    if username and HISTORY_FILE.exists():
-        df_hist = pd.read_csv(HISTORY_FILE)
-        user_hist = df_hist[df_hist["username"] == username].copy()
+    user_hist = load_user_history(username)
 
-        if not user_hist.empty:
-            if "timestamp" in user_hist.columns:
-                user_hist["timestamp"] = pd.to_datetime(user_hist["timestamp"])
-                user_hist = user_hist.sort_values("timestamp")
+    if user_hist is not None:
+        if "timestamp" in user_hist.columns:
+            plot_df = user_hist[["timestamp", "weight_kg"]].copy()
 
-                if lang == "el":
-                    y_label = "Βάρος (kg)"
-                    x_label = "Ημερομηνία"
-                else:
-                    y_label = "Weight (kg)"
-                    x_label = "Date"
+            if lang == "el":
+                y_label = "Βάρος (kg)"
+                x_label = "Ημερομηνία"
+            else:
+                y_label = "Weight (kg)"
+                x_label = "Date"
 
-                plot_df = user_hist[["timestamp", "weight_kg"]].copy()
+            st.subheader(f"{tr('history_title')} ({username})")
 
-                st.subheader(f"{tr('history_title')} ({username})")
-
-                chart = (
-                    alt.Chart(plot_df)
+            chart = (
+                alt.Chart(plot_df)
                     .mark_line(point=True)
                     .encode(
-                        x=alt.X(
+                    x=alt.X(
+                        "timestamp:T",
+                        axis=alt.Axis(title=x_label, format="%d/%m"),
+                    ),
+                    y=alt.Y(
+                        "weight_kg:Q",
+                        axis=alt.Axis(title=y_label),
+                    ),
+                    tooltip=[
+                        alt.Tooltip(
                             "timestamp:T",
-                            axis=alt.Axis(title=x_label, format="%d/%m"),
+                            title=x_label,
+                            format="%d/%m/%Y %H:%M",
                         ),
-                        y=alt.Y(
-                            "weight_kg:Q",
-                            axis=alt.Axis(title=y_label),
-                        ),
-                        tooltip=[
-                            alt.Tooltip(
-                                "timestamp:T",
-                                title=x_label,
-                                format="%d/%m/%Y %H:%M",
-                            ),
-                            alt.Tooltip("weight_kg:Q", title=y_label),
-                        ],
-                    )
-                    .properties(height=280)
+                        alt.Tooltip("weight_kg:Q", title=y_label),
+                    ],
                 )
+                    .properties(height=280)
+            )
 
-                st.altair_chart(chart, use_container_width=True)
+            st.altair_chart(chart, use_container_width=True)
 
-            # επιλογή για να δει παλιό πρόγραμμα
-            if "plan_markdown" in user_hist.columns:
-                user_hist = user_hist.sort_values("timestamp", ascending=False)
+        # επιλογή για να δει παλιό πρόγραμμα
+        if "plan_markdown" in user_hist.columns:
+            # Κρατάμε μόνο εγγραφές που έχουν πραγματικό plan
+            plans_df = user_hist.copy()
+            plans_df["plan_markdown"] = plans_df["plan_markdown"].fillna("")
+            plans_df = plans_df[plans_df["plan_markdown"].str.strip() != ""]
+
+            if plans_df.empty:
+                st.info(tr("history_no_plan"))
+            else:
+                plans_df = plans_df.sort_values("timestamp", ascending=False)
+
                 options = [
                     f"{row['timestamp']}  |  {row.get('goal', '')}"
-                    for _, row in user_hist.iterrows()
+                    for _, row in plans_df.iterrows()
                 ]
+
                 st.markdown("")
                 selected = st.selectbox(
                     tr("history_plan_label"),
                     options,
                     index=0,
                 )
+
                 sel_ts = selected.split("  |  ")[0]
-                sel_row = user_hist[user_hist["timestamp"].astype(str) == sel_ts].iloc[0]
+                sel_row = plans_df[plans_df["timestamp"].astype(str) == sel_ts].iloc[0]
                 old_plan_md = sel_row.get("plan_markdown")
 
                 if isinstance(old_plan_md, str) and old_plan_md.strip():
@@ -2653,16 +1494,18 @@ elif page == "progress":
                         st.markdown("##### " + (tr("plan_title") + " (history)"))
                         vis_old = old_df.copy()
 
+
                         def multiline_old(val):
                             if isinstance(val, str):
                                 return val.replace(", ", "<br>")
                             return val
 
+
                         vis_old = vis_old.applymap(multiline_old)
                         html_old = vis_old.to_html(
                             index=False,
                             escape=False,
-                            classes="diet-table",  # ίδια κλάση
+                            classes="diet-table",
                             border=0,
                         )
                         st.markdown(
@@ -2674,10 +1517,8 @@ elif page == "progress":
                 else:
                     st.info(tr("history_no_plan"))
         else:
-            if lang == "el":
-                st.info("Δεν υπάρχει ακόμη ιστορικό για αυτόν τον χρήστη.")
-            else:
-                st.info("No history yet for this user.")
+            st.info(tr("history_no_plan"))
+
     else:
         if lang == "el":
             st.info("Δεν υπάρχει ακόμη ιστορικό ή δεν έχεις ορίσει όνομα χρήστη.")
